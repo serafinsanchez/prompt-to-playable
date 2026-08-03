@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/*
+ * Token source of truth: DESIGN.md. Dark-only — no light mode, no toggle.
+ * All colors OKLCH; components consume semantic utilities only.
+ */
+@theme inline {
+  /* Color */
+  --color-background: oklch(0.15 0.008 80);
+  --color-surface: oklch(0.2 0.01 80);
+  --color-elevated: oklch(0.24 0.01 80);
+  --color-border: oklch(0.3 0.012 80);
+  --color-foreground: oklch(0.93 0.005 80);
+  --color-muted: oklch(0.65 0.01 80);
+  --color-accent: oklch(0.87 0.24 128);
+  --color-accent-foreground: oklch(0.17 0.02 128);
+  --color-success: oklch(0.75 0.17 150);
+  --color-warning: oklch(0.8 0.15 80);
+  --color-error: oklch(0.65 0.2 25);
+
+  /* Type — families come from next/font variables set on <html> */
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+
+  /* Scale: 1.414 ratio from 16px base → 16 / 22.6 / 32 / 45 / 64 / 90 */
+  --text-base: 1rem;
+  --text-md: 1.4125rem;
+  --text-lg: 2rem;
+  --text-xl: 2.8125rem;
+  --text-2xl: 4rem;
+  --text-hero: 5.625rem;
+
+  /* Tracking — display is tight, mono caps are loose */
+  --tracking-display: -0.03em;
+  --tracking-caps: 0.06em;
+
+  /* Shape — sharp; pills reserved for stage chips */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+
+  /* Motion */
+  --ease-stage: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 380ms;
+}
