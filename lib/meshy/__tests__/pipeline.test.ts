@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ANIMATIONS_PATH, createMeshyClient, RIGGING_PATH, TEXT_TO_3D_PATH } from "../client";
+import { ANIMATIONS_PATH, createMeshyClient, REMESH_PATH, RIGGING_PATH, TEXT_TO_3D_PATH } from "../client";
 import {
   createEmptyRun,
   createPipeline,
@@ -61,19 +61,19 @@ const ANIMATION_FIXTURES: FixtureTable = {
 };
 
 describe("createEmptyRun", () => {
-  it("starts idle with all eight stages pending and nothing spent", () => {
+  it("starts idle with all nine stages pending and nothing spent", () => {
     const run = createEmptyRun("a brave knight");
 
     expect(run.prompt).toBe("a brave knight");
     expect(run.status).toBe("idle");
-    expect(Object.keys(run.stages)).toHaveLength(8);
+    expect(Object.keys(run.stages)).toHaveLength(9);
     expect(Object.values(run.stages).every((s) => s.status === "pending")).toBe(true);
     expect(run.creditsSpent).toBe(0);
   });
 });
 
 describe("pipeline happy path", () => {
-  it("runs preview → refine → rig → animate ×5 to success with credits and timings", async () => {
+  it("runs preview → refine → remesh → rig → animate ×5 to success with credits and timings", async () => {
     const { pipeline, calls, set } = pipelineWith({
       [`POST ${TEXT_TO_3D_PATH}`]: [
         { body: { result: "preview-0001" } },
@@ -84,6 +84,8 @@ describe("pipeline happy path", () => {
         { body: succeeded("preview-0001", 20) },
         { body: succeeded("refine-0002", 10) },
       ],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
+      [`GET ${REMESH_PATH}/:id`]: [{ body: succeeded("remesh-0003", 5) }],
       [`POST ${RIGGING_PATH}`]: [{ body: { result: "rigging-0003" } }],
       [`GET ${RIGGING_PATH}/:id`]: [{ body: rigSucceeded("rigging-0003", 5) }],
       ...ANIMATION_FIXTURES,
@@ -124,15 +126,30 @@ describe("pipeline happy path", () => {
       calls.some((c) => JSON.stringify(c.body ?? null).includes('"preview_task_id":"preview-0001"')),
     ).toBe(true);
 
-    // Refine succeeds → rig created, chained by input_task_id.
+    // Refine succeeds → remesh created, chained by input_task_id with the
+    // spike-validated target polycount (rigging hard-rejects >300k faces).
     set(3 * POLL_INTERVAL_MS);
     await pipeline.tick();
     run = pipeline.getRun();
     expect(run.stages.refine.status).toBe("succeeded");
+    expect(run.stages.remesh.taskId).toBe("remesh-0003");
+    const remeshCreate = calls.find((c) => c.key === `POST ${REMESH_PATH}`);
+    expect(JSON.parse(JSON.stringify(remeshCreate!.body))).toEqual({
+      input_task_id: "refine-0002",
+      target_polycount: 30000,
+    });
+
+    // Remesh succeeds → rig created from the REMESH task id, not refine's.
+    set(4 * POLL_INTERVAL_MS);
+    await pipeline.tick();
+    run = pipeline.getRun();
+    expect(run.stages.remesh.status).toBe("succeeded");
     expect(run.stages.rig.taskId).toBe("rigging-0003");
+    const rigCreate = calls.find((c) => c.key === `POST ${RIGGING_PATH}`);
+    expect(JSON.stringify(rigCreate!.body)).toContain('"input_task_id":"remesh-0003"');
 
     // Rig succeeds → all five animation tasks created, chained to the rig task.
-    set(4 * POLL_INTERVAL_MS);
+    set(5 * POLL_INTERVAL_MS);
     await pipeline.tick();
     run = pipeline.getRun();
     expect(run.stages.rig.status).toBe("succeeded");
@@ -147,13 +164,13 @@ describe("pipeline happy path", () => {
       expect(JSON.stringify(create.body)).toContain('"rig_task_id":"rigging-0003"');
     }
 
-    // All five clips succeed → run complete, 50 credits total.
-    set(5 * POLL_INTERVAL_MS);
+    // All five clips succeed → run complete, 55 credits total.
+    set(6 * POLL_INTERVAL_MS);
     await pipeline.tick();
     run = pipeline.getRun();
     expect(run.status).toBe("succeeded");
-    expect(run.creditsSpent).toBe(50);
-    expect(run.completedAt).toBe(5 * POLL_INTERVAL_MS);
+    expect(run.creditsSpent).toBe(55);
+    expect(run.completedAt).toBe(6 * POLL_INTERVAL_MS);
     for (const stage of Object.values(run.stages)) {
       expect(stage.status).toBe("succeeded");
       expect(stage.modelUrl).toMatch(/^https:\/\/assets\.meshy\.test\//);
@@ -163,6 +180,7 @@ describe("pipeline happy path", () => {
     }
     expect(run.stages.preview.creditCost).toBe(20);
     expect(run.stages.refine.creditCost).toBe(10);
+    expect(run.stages.remesh.creditCost).toBe(5);
     expect(run.stages.rig.creditCost).toBe(5);
 
     // Snapshots were emitted and are copies, not live references.
@@ -212,6 +230,46 @@ describe("stage failure", () => {
     set(3 * POLL_INTERVAL_MS);
     await pipeline.tick();
     expect(calls.length).toBe(callCount);
+  });
+});
+
+describe("remesh stage failure", () => {
+  it("halts the run with task_error surfaced and preview/refine ids preserved", async () => {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { body: { result: "preview-0001" } },
+        { body: { result: "refine-0002" } },
+      ],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { body: succeeded("preview-0001", 20) },
+        { body: succeeded("refine-0002", 10) },
+      ],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
+      [`GET ${REMESH_PATH}/:id`]: [{ body: failed("remesh-0003", "remesh could not converge") }],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick(); // create preview
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick(); // preview succeeds, refine created
+    set(2 * POLL_INTERVAL_MS);
+    await pipeline.tick(); // refine succeeds, remesh created
+    set(3 * POLL_INTERVAL_MS);
+    await pipeline.tick(); // remesh fails
+
+    const run = pipeline.getRun();
+    expect(run.status).toBe("failed");
+    expect(run.stages.remesh.status).toBe("failed");
+    expect(run.stages.remesh.error).toBe("remesh could not converge");
+    expect(run.stages.remesh.creditCost).toBe(0); // auto-refund
+    expect(run.creditsSpent).toBe(30);
+    // Upstream task ids stay reusable for a retry.
+    expect(run.stages.preview.status).toBe("succeeded");
+    expect(run.stages.preview.taskId).toBe("preview-0001");
+    expect(run.stages.refine.status).toBe("succeeded");
+    expect(run.stages.refine.taskId).toBe("refine-0002");
+    // Downstream never started.
+    expect(run.stages.rig.status).toBe("pending");
   });
 });
 
@@ -306,6 +364,8 @@ describe("resume from storage", () => {
         { body: succeeded("preview-0001", 20) },
         { body: succeeded("refine-0002", 10) },
       ],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
+      [`GET ${REMESH_PATH}/:id`]: [{ body: succeeded("remesh-0003", 5) }],
       [`POST ${RIGGING_PATH}`]: [{ body: { result: "rigging-0003" } }],
     });
     first.pipeline.start("a brave knight");
@@ -313,7 +373,9 @@ describe("resume from storage", () => {
     first.set(POLL_INTERVAL_MS);
     await first.pipeline.tick(); // preview succeeds, refine created
     first.set(2 * POLL_INTERVAL_MS);
-    await first.pipeline.tick(); // refine succeeds, rig created
+    await first.pipeline.tick(); // refine succeeds, remesh created
+    first.set(3 * POLL_INTERVAL_MS);
+    await first.pipeline.tick(); // remesh succeeds, rig created
     saveRun(storage, first.pipeline.getRun());
 
     // Session 2 (fresh transport — the fixture table has NO text-to-3d entries,
@@ -326,7 +388,7 @@ describe("resume from storage", () => {
       [`GET ${RIGGING_PATH}/:id`]: [{ body: rigSucceeded("rigging-0003", 5) }],
       ...ANIMATION_FIXTURES,
     });
-    let t = 3 * POLL_INTERVAL_MS;
+    let t = 4 * POLL_INTERVAL_MS;
     const pipeline = createPipeline({
       client: createMeshyClient(transport),
       clock: { now: () => t },
@@ -334,12 +396,12 @@ describe("resume from storage", () => {
     });
 
     await pipeline.tick(); // rig succeeds, animations created
-    t = 4 * POLL_INTERVAL_MS;
+    t = 5 * POLL_INTERVAL_MS;
     await pipeline.tick(); // all clips succeed
 
     const run = pipeline.getRun();
     expect(run.status).toBe("succeeded");
-    expect(run.creditsSpent).toBe(50);
+    expect(run.creditsSpent).toBe(55);
     expect(run.stages.preview.taskId).toBe("preview-0001");
     expect(run.prompt).toBe("a brave knight");
   });

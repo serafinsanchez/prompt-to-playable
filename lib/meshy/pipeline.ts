@@ -1,5 +1,5 @@
 /**
- * Pure pipeline state machine: preview → refine+PBR → rig → animate ×5
+ * Pure pipeline state machine: preview → refine+PBR → remesh → rig → animate ×5
  * (docs/ARCHITECTURE.md §4). UI-agnostic — emits plain PipelineRun snapshots
  * via subscribe; Zustand wiring happens in a later app spec.
  *
@@ -56,7 +56,10 @@ export interface Pipeline {
   tick(): Promise<PipelineRun>;
 }
 
-const LINEAR_STAGES: readonly StageId[] = ["preview", "refine", "rig"];
+const LINEAR_STAGES: readonly StageId[] = ["preview", "refine", "remesh", "rig"];
+
+/** Spike-validated: 30k tris rigs first-try; refine's ~583k gets a 400 (ARCHITECTURE.md trade-off log 2026-08-03). */
+export const REMESH_TARGET_POLYCOUNT = 30_000;
 
 export function createEmptyRun(prompt: string): PipelineRun {
   const stages = Object.fromEntries(
@@ -108,7 +111,9 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
   const createStageTask = (stage: StageId): Promise<string> => {
     if (stage === "preview") return client.createPreviewTask(run.prompt);
     if (stage === "refine") return client.createRefineTask(requireTaskId("preview"));
-    if (stage === "rig") return client.createRigTask(requireTaskId("refine"));
+    if (stage === "remesh")
+      return client.createRemeshTask(requireTaskId("refine"), REMESH_TARGET_POLYCOUNT);
+    if (stage === "rig") return client.createRigTask(requireTaskId("remesh"));
     const clip = stage.slice("animate:".length) as AnimationClip;
     return client.createAnimationTask(requireTaskId("rig"), clip);
   };
@@ -116,6 +121,7 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
   const pollStageTask = (stage: StageId): Promise<MeshyTask> => {
     const taskId = requireTaskId(stage);
     if (stage === "preview" || stage === "refine") return client.getTextTo3DTask(taskId);
+    if (stage === "remesh") return client.getRemeshTask(taskId);
     if (stage === "rig") return client.getRigTask(taskId);
     return client.getAnimationTask(taskId);
   };

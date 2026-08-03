@@ -72,20 +72,22 @@ export const ANIMATION_CLIPS = ["idle", "walk", "run", "jump", "emote"] as const
 
 export type AnimationClip = (typeof ANIMATION_CLIPS)[number];
 
-export type StageId = "preview" | "refine" | "rig" | `animate:${AnimationClip}`;
+export type StageId = "preview" | "refine" | "remesh" | "rig" | `animate:${AnimationClip}`;
 
 /** Execution order. The five animate stages run as one parallel group after rig. */
 export const PIPELINE_STAGES: readonly StageId[] = [
   "preview",
   "refine",
+  "remesh",
   "rig",
   ...ANIMATION_CLIPS.map((clip): StageId => `animate:${clip}`),
 ];
 
-/** Expected credit cost per stage (docs/ARCHITECTURE.md §4) — 50 total. */
+/** Expected credit cost per stage (docs/ARCHITECTURE.md §4) — 55 total. */
 export const STAGE_CREDITS: Record<StageId, number> = {
   preview: 20,
   refine: 10,
+  remesh: 5,
   rig: 5,
   "animate:idle": 3,
   "animate:walk": 3,

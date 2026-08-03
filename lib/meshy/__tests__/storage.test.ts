@@ -77,6 +77,15 @@ describe("storage", () => {
     expect(storage.getItem(STORAGE_KEY)).toBeNull();
   });
 
+  it("discards a stored v1 run on load — the 4-stage shape predates remesh", () => {
+    const storage = memoryStorage();
+    expect(STORAGE_VERSION).toBeGreaterThan(1);
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, run: sampleRun() }));
+
+    expect(loadRun(storage)).toBeNull();
+    expect(storage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
   it("discards corrupt JSON cleanly", () => {
     const storage = memoryStorage();
     storage.setItem(STORAGE_KEY, "{not json");

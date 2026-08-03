@@ -8,8 +8,8 @@
 
 import type { PipelineRun } from "./types";
 
-/** Bump on any breaking change to the PipelineRun shape. */
-export const STORAGE_VERSION = 1;
+/** Bump on any breaking change to the PipelineRun shape. v2: remesh stage added (TASK-11). */
+export const STORAGE_VERSION = 2;
 
 export const STORAGE_KEY = "prompt-to-playable:pipeline-run";
 
