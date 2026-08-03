@@ -21,6 +21,7 @@ import {
   NoMoreConcurrentTasksError,
   PIPELINE_STAGES,
   RateLimitExceededError,
+  REMESH_TARGET_POLYCOUNT,
   STAGE_CREDITS,
   type AnimationClip,
   type MeshyTask,
@@ -56,10 +57,10 @@ export interface Pipeline {
   tick(): Promise<PipelineRun>;
 }
 
-const LINEAR_STAGES: readonly StageId[] = ["preview", "refine", "remesh", "rig"];
-
-/** Spike-validated: 30k tris rigs first-try; refine's ~583k gets a 400 (ARCHITECTURE.md trade-off log 2026-08-03). */
-export const REMESH_TARGET_POLYCOUNT = 30_000;
+/** The linear head — every stage before the parallel animate group, in PIPELINE_STAGES order. */
+const LINEAR_STAGES: readonly StageId[] = PIPELINE_STAGES.filter(
+  (stage) => !stage.startsWith("animate:"),
+);
 
 export function createEmptyRun(prompt: string): PipelineRun {
   const stages = Object.fromEntries(

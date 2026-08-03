@@ -96,6 +96,9 @@ export const STAGE_CREDITS: Record<StageId, number> = {
   "animate:emote": 3,
 };
 
+/** Remesh target passed to createRemeshTask — spike-validated: 30k tris rigs first-try; refine's ~583k gets a 400 (ARCHITECTURE.md trade-off log 2026-08-03). */
+export const REMESH_TARGET_POLYCOUNT = 30_000;
+
 export type StageStatus = "pending" | "running" | "succeeded" | "failed";
 
 export interface StageState {
