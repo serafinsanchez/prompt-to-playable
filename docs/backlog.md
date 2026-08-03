@@ -29,53 +29,19 @@ Every triaged spec gets one. Drives which execution skill runs and which verific
 
 ## Phases
 
-| Phase | Theme | Work items |
-|-------|-------|------------|
-| P0 | Setup | `docs/backlog/phase-0-setup.md` (create when ready) |
+| Phase | Theme | Status | Work items |
+|-------|-------|--------|------------|
+| P0 | Foundation — prove the pipeline, stand the stage | **Active** — 4 open / 0 done | `docs/backlog/phase-0-foundation.md` |
+| P1 | The demo — playable gallery + live generation | Planned — items in Inbox, re-triage after P0 #4 (spike) | — |
+| P2 | Polish + content + ship | Planned — items in Inbox | — |
 
 ## Inbox
 
 _Untriaged items land here first._
 
-### ~~TASK-01: Define ROADMAP and phase files~~ [x]
-Bootstrap scaffolding — done via `prd-grill` → `architecture-md-builder` → `design-md-builder` → ROADMAP, 2026-08-03.
+_P0 items triaged 2026-08-03 → `docs/backlog/phase-0-foundation.md` #1–#4 (originals in `docs/backlog/inbox-archive.md`)._
 
-### Phase 0 — Prove the pipeline, stand the stage
-
-### TASK-02: Scaffold app shell with DESIGN.md tokens and deploy
-**Description:** Next.js App Router + Tailwind v4 project; fonts (Bricolage Grotesque, IBM Plex Sans/Mono) and full `@theme` token set from DESIGN.md in `app/globals.css`; deployed to Vercel with a token-styled placeholder page.
-**Acceptance criteria:**
-- [ ] `npm run dev/lint/typecheck/test` all run; `scripts/check-tokens.sh` passes
-- [ ] Vercel production URL serves the placeholder styled entirely from tokens
-**Priority:** P0
-**Phase:** P0
-
-### TASK-03: Typed Meshy client + pipeline state machine (`lib/meshy/`)
-**Description:** Isomorphic typed client (v2 text-to-3d, v1 rigging/animations/remesh/balance) with swappable transport; state machine for preview → refine → rig → animate×5 with ~4s polling, per-stage credit tracking, and `localStorage` resume. Fixture transports per `claude-code-resources/print-pipeline.fixtures.ts` pattern.
-**Acceptance criteria:**
-- [ ] Vitest covers: happy path, stage failure, `RateLimitExceeded`, `NoMoreConcurrentTasks`, resume-from-storage
-- [ ] Same module importable from both the app and a Node script
-**Priority:** P0
-**Phase:** P0
-
-### TASK-04: Meshy passthrough proxy (`app/api/meshy/[...path]`)
-**Description:** Path-allowlisted passthrough; rewrites `x-meshy-key` → `Authorization: Bearer`; `no-store`; passes Meshy error bodies through untouched; `{ proxyError }` only for its own failures. No logging of keys.
-**Acceptance criteria:**
-- [ ] Test-mode key completes a task round-trip through the proxy
-- [ ] Non-Meshy paths rejected; missing key → clean 401
-**Priority:** P0
-**Phase:** P0
-
-### TASK-05: Day-0 spike — full pipeline + 5-clip merge validation
-**Description:** Run one biped prompt through the real pipeline via the typed client; bind all 5 animation clips to the rigged skeleton in a minimal R3F harness. THE de-risk gate for the whole build (ARCHITECTURE §5 bets). Check credit balance against gallery plan while at it.
-**Acceptance criteria:**
-- [ ] 5 clips play on one skeleton in the harness, OR fallback ladder invoked and logged in ARCHITECTURE Trade-off log
-- [ ] Remesh-stage and controller-library deferred decisions resolved and logged
-- [ ] Credit budget confirmed or credit-request email sent
-**Priority:** P0
-**Phase:** P0
-
-### Phase 1 — The demo
+### Phase 1 — The demo `[!]` (waiting for P0 #4 — the spike's outcome feeds these specs; re-triage when it lands)
 
 ### US-01: Control a character in the playground scene
 **As a** cold visitor, **I want** to walk/run/jump/emote a character around an atmospheric stage the moment the page loads, **so that** I feel the payoff before reading anything.
@@ -136,7 +102,7 @@ Bootstrap scaffolding — done via `prd-grill` → `architecture-md-builder` →
 **Priority:** P1
 **Phase:** P1
 
-### Phase 2 — Polish + content + ship
+### Phase 2 — Polish + content + ship `[!]` (waiting for P1)
 
 ### US-07: Feel the signature stage-completion moment
 **As a** visitor watching a generation, **I want** each stage completion to land as a designed beat (ring fills, tick, artifact clips in, rail advances), **so that** the minutes-long wait feels alive.
