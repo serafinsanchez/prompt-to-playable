@@ -1,12 +1,24 @@
+"use client";
+
+import { DEFAULT_CHARACTER } from "@/components/scene/default-character";
+import { Playground } from "@/components/scene/playground";
+
 export default function Home() {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-6 px-6">
-      <h1 className="text-center font-display text-2xl font-extrabold tracking-display md:text-hero">
-        Type a character. Play it.
-      </h1>
-      <p className="font-mono text-sm uppercase tracking-caps text-muted">
-        50 credits. About 4 minutes. Yours to download.
-      </p>
+    <main className="relative h-dvh w-full overflow-hidden">
+      <Playground character={DEFAULT_CHARACTER} />
+
+      {/* Thin overlay chrome — the scene is the hero (DESIGN.md). */}
+      <header className="pointer-events-none absolute inset-x-0 top-0">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-baseline justify-between gap-x-6 gap-y-2 px-6 pt-6">
+          <h1 className="font-display text-md font-extrabold tracking-display">
+            Prompt to Playable
+          </h1>
+          <p className="font-mono text-xs uppercase tracking-caps text-muted">
+            Type a character. Play it.
+          </p>
+        </div>
+      </header>
     </main>
   );
 }
