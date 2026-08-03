@@ -1,0 +1,20 @@
+{
+  "$comment": "If you already have .claude/settings.json, merge the hooks.Stop block into yours rather than replacing the file. The matcher is empty to apply to all stops; tighten it if you want.",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/check-tokens.sh"
+          },
+          {
+            "type": "command",
+            "command": "bun run .claude/hooks/continual-learning-stop.ts"
+          }
+        ]
+      }
+    ]
+  }
+}

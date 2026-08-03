@@ -1,0 +1,12 @@
+---
+description: Load project memory before substantive work
+alwaysApply: true
+---
+
+# Project memory
+
+Read **`CLAUDE.md`** first for product intent, stack, and non-negotiables.
+
+Read **`AGENTS.md`** for learned user preferences and durable workspace facts.
+
+If the repo uses **`docs/backlog.md`**, treat it as the task system of record for scoped work unless the user directs otherwise.
