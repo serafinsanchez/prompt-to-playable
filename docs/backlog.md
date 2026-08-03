@@ -31,7 +31,7 @@ Every triaged spec gets one. Drives which execution skill runs and which verific
 
 | Phase | Theme | Status | Work items |
 |-------|-------|--------|------------|
-| P0 | Foundation — prove the pipeline, stand the stage | **Active** — 4 open / 0 done | `docs/backlog/phase-0-foundation.md` |
+| P0 | Foundation — prove the pipeline, stand the stage | **Active** — 3 open / 1 done | `docs/backlog/phase-0-foundation.md` |
 | P1 | The demo — playable gallery + live generation | Planned — items in Inbox, re-triage after P0 #4 (spike) | — |
 | P2 | Polish + content + ship | Planned — items in Inbox | — |
 
