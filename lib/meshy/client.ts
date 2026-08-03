@@ -55,7 +55,7 @@ export interface MeshyClient {
   /** POST v1 animations chained by rig_task_id for one clip → task id. */
   createAnimationTask(rigTaskId: string, clip: AnimationClip): Promise<string>;
   getAnimationTask(taskId: string): Promise<MeshyTask>;
-  /** POST v1 remesh chained by input_task_id → task id (optional stage, spike-decided). */
+  /** POST v1 remesh chained by input_task_id → task id (mandatory before rig — refine output exceeds rigging's 300k-face limit). */
   createRemeshTask(inputTaskId: string, targetPolycount?: number): Promise<string>;
   getRemeshTask(taskId: string): Promise<MeshyTask>;
   /** GET v1 balance → remaining credits. */

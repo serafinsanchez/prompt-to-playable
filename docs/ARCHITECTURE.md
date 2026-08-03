@@ -28,10 +28,10 @@ See `docs/PRD.md`. Browser demo for indie web-game devs: text prompt → Meshy p
 | Database | **None** | Task ids in `localStorage` are the only persistence |
 | Auth | **None** | BYO Meshy key, session-local (see §4) |
 | Storage / files | Repo `public/gallery/` for pregenerated GLBs | Meshy assets expire in 3 days → download at pregen time, self-host |
-| Asset pipeline | @gltf-transform/cli (meshopt compression, prune, resize textures) | Runs in pregen script; guards the <5s first-frame counter-metric |
+| Asset pipeline | @gltf-transform/core + /functions, programmatic NodeIO API (meshopt, prune, resize textures, KTX2) | Runs in pregen script; guards the <5s first-frame counter-metric. Tool of record settled by day-0 spike — not the CLI |
 | Background jobs / queues | **None** | Client orchestrates; serverless functions stay short-lived |
 | Observability | Vercel defaults + structured `console.error` in proxy (no key/PII) | Nothing more for a 3-day demo |
-| Testing | Vitest (state machine, fixture transports), Playwright a11y smoke, Meshy test-mode key for live smoke | Pattern proven in `claude-code-resources/print-pipeline.ts` |
+| Testing | Vitest (state machine, fixture transports), Playwright a11y smoke, Meshy test-mode key for live smoke | Pattern proven in `claude-code-resources/print-pipeline.ts`. **Limit (day-0 spike):** the test-mode key cannot exercise rig/animate — its dummy mesh fails pose estimation — so fixture transports are the only full-graph coverage; zero-credit live smoke stops at refine |
 
 ---
 
@@ -56,7 +56,7 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 
 | Module | Owns | Exposes | Callers |
 |---|---|---|---|
-| `lib/meshy/` | Typed Meshy client, pipeline state machine, polling loop | `runPipeline()`, `resumePipeline()`, stage/task types | Web app **and** `scripts/pregen/` (isomorphic — the script doubles as the "integration code" teaching artifact) |
+| `lib/meshy/` | Typed Meshy client, pipeline state machine, polling loop | `runPipeline()`, `resumePipeline()`, stage/task types | Web app, `scripts/pregen/`, `scripts/spike/` (isomorphic — any Node script via the direct transport; the pregen script doubles as the "integration code" teaching artifact) |
 | `app/api/meshy/[...path]/` | Proxy: header rewrite, passthrough, error mapping | Same surface as Meshy REST (v1 + v2) | `lib/meshy/` client (browser transport) |
 | `components/pipeline/` | Stage rail UI, API-call panel, key entry | React components | `app/page.tsx` |
 | `components/scene/` | R3F canvas, playground, character controller, clip binding | `<Playground character={...}>` | `app/page.tsx` |
@@ -76,7 +76,7 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 - Dev/CI use Meshy's test-mode key (`msy_dummy_api_key_for_test_mode_12345678`) — zero credits consumed.
 
 ### Pipeline orchestration (the load-bearing area)
-- Stage graph: `preview(20c) → refine+PBR(10c) → remesh(5c) → rig(5c) → animate ×5 clips(3c each)` = **55 credits/character**. Remesh is mandatory, not optional — refine outputs ~583k tris and rigging rejects >300k faces (day-0 spike, Trade-off log 2026-08-03).
+- Stage graph: `preview(20c) → refine+PBR(10c) → remesh(5c) → rig(5c) → animate ×5 clips(3c each)` = **55 credits/character**. Remesh is mandatory, not optional — refine outputs ~583k tris and rigging rejects >300k faces (day-0 spike, Trade-off log 2026-08-03). **Implementation status:** `lib/meshy/pipeline.ts` still runs the 4-stage graph (preview → refine → rig, 50c) — the remesh stage lands via TASK-11 (backlog Inbox) before any live-generation UI; until then `createPipeline()` cannot complete a live run (rig 400s on raw refine output). The spike's `--from-refine` lane drives remesh through the client directly.
 - Chaining is always by task id (`preview_task_id` / `input_task_id` / `rig_task_id` for animations) — never download-and-reupload.
 - **Progress: poll every ~4s** through the proxy; Meshy's 0–100 `progress` field animates the stage rail. SSE consciously rejected (see Trade-off log).
 - Failure at any stage: halt pipeline, surface Meshy's `task_error` verbatim + note that failed tasks auto-refund (a DevEx teaching moment). Retry = re-run stage; upstream completed stages are reusable via stored task ids.
@@ -120,7 +120,7 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 
 - **Bet:** AnimationClips from 5 separate Meshy animation tasks on the same rigged model bind cleanly to one skeleton client-side. *Trigger:* day-0 spike fails → fall back to idle+walk (2 clips) or single showcase animation before any UI is built.
 - **Bet:** Meshy text-to-3D + rig succeeds often enough on biped prompts that live generation feels reliable. *Trigger:* pregen session shows <~70% first-try rig success → tighten prompt guidance / add auto-retry copy.
-- **Bet:** ~50 credits/character × (gallery of ~8–12 + spike runs + on-camera runs) fits the trial credit grant. *Trigger:* balance check during pregen says otherwise → email hiring team for more credits (explicitly offered) before cutting gallery size.
+- **Bet:** ~55 credits/character × (gallery of ~8–12 + spike runs + on-camera runs) fits the trial credit grant. *Trigger:* balance check during pregen says otherwise → email hiring team for more credits (explicitly offered) before cutting gallery size. **Fired 2026-08-03:** 55c × 8–12 = 440–660c vs ~130 balance; credit-request email drafted in `scripts/spike/README.md`.
 
 ### Deferred decisions
 
@@ -150,6 +150,7 @@ Append-only. Newest at the top.
 - **Live-API corrections baked into `lib/meshy/`:** animations create is `{rig_task_id, action_id:int}` (action ids: idle 0, walk 30, run 14, jump 466, emote 28); rig/animate GLBs nest under `result.*` (`taskGlbUrl()` absorbs the shape split); rigging rejects >300k faces.
 - **Operational findings:** shared remesh queue can hold a task `PENDING` for hours at peak (`preceding_tasks` 477–532 observed) — the stage rail should surface queue depth; raw GLBs are ~8.5 MB (textures dominate) → gallery pregen gets meshopt + KTX2; test-mode key cannot exercise rig/animate (dummy mesh fails pose estimation).
 - **Credit reality:** balance 130 after spike (55c spent). Gallery at 8–12 × 55c = 440–660c does not fit — credit-request email drafted in `scripts/spike/README.md` (bet #3's trigger fired).
+- **Deferred:** the remesh stage is documented in §4 but not yet in the state machine (`StageId`, `PIPELINE_STAGES`, `STAGE_CREDITS`, `LINEAR_STAGES` are all still 4-stage/50c). Tracked as TASK-11 in the backlog Inbox; blocks live-generation UI specs.
 - **Reversibility:** n/a — evidence entry resolving the three deferred decisions above.
 
 ### 2026-08-03 — Progress transport: polling over SSE

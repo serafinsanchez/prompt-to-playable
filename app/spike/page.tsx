@@ -9,6 +9,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Grid, OrbitControls, useGLTF } from "@react-three/drei";
+import { notFound } from "next/navigation";
 import { Component, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import * as THREE from "three";
 
@@ -89,6 +90,9 @@ class GlbBoundary extends Component<{ children: ReactNode }, { failed: string | 
 }
 
 export default function SpikePage() {
+  // Dev-only route: production deploys 404 (its GLBs are gitignored anyway).
+  if (process.env.NODE_ENV === "production") notFound();
+
   const [activeIndex, setActiveIndex] = useState(0);
   const [bound, setBound] = useState<BoundClip[]>([]);
 

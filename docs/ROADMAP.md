@@ -8,7 +8,7 @@
 - [ ] One biped character has gone prompt → preview → refine → rig → 5 animation clips through the typed client, and all five clips play on one skeleton in a minimal 3D harness — or the fallback ladder (2 clips / single showcase) has been invoked and logged in `docs/ARCHITECTURE.md`'s Trade-off log.
 - [ ] The deployed skeleton app serves a page styled from `DESIGN.md` tokens, and the Meshy proxy passes a test-mode-key smoke test while rejecting non-Meshy paths.
 - [ ] The pipeline state machine passes fixture-driven tests for: happy path, stage failure, both 429 flavors, and resume-from-storage.
-- [ ] Credit budget confirmed: balance check shows the gallery plan (~8–12 characters at ~50 credits each) fits the grant, or the credit-request email has been sent.
+- [ ] Credit budget confirmed: balance check shows the gallery plan (~8–12 characters at ~55 credits each) fits the grant, or the credit-request email has been sent.
 
 **Depends on:** none
 

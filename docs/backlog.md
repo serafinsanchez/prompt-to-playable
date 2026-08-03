@@ -60,6 +60,15 @@ _P0 items triaged 2026-08-03 → `docs/backlog/phase-0-foundation.md` #1–#4 (o
 **Priority:** P1
 **Phase:** P1
 
+### TASK-11: Add the remesh stage to the pipeline state machine
+**Description:** Insert `remesh` into `StageId` / `PIPELINE_STAGES` / `STAGE_CREDITS` (5c, total 55) and `LINEAR_STAGES`; chain remesh off refine and rig off remesh, `target_polycount: 30000` (spike-validated). Extend the fixture-transport tests to the 6-stage linear head. Blocks any live-generation UI: rig 400s on raw refine output (day-0 spike, ARCHITECTURE §4 + Trade-off log 2026-08-03).
+**Acceptance criteria:**
+- [ ] `createPipeline()` drives preview → refine → remesh → rig → animate ×5; happy-path, failure, 429, and resume tests cover the remesh stage
+- [ ] `STAGE_CREDITS` totals 55 and stale "50 total" comments in `lib/meshy/` are gone
+**Priority:** P0
+**Phase:** P1
+**Notes:** kind will be `backend` at triage. Surfaced by architecture-reviewer during TASK-05 kickoff.
+
 ### TASK-06: Pregen script + gallery assets
 **Description:** `scripts/pregen/` runs the shared pipeline for a curated prompt list, downloads GLBs immediately, optimizes via gltf-transform (meshopt), writes `public/gallery/` + manifest with receipts. Publishable example code (PRD capability #4's sibling artifact).
 **Acceptance criteria:**

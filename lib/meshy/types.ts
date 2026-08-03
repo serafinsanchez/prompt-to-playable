@@ -52,6 +52,8 @@ export interface MeshyTask {
   status: TaskStatus;
   /** 0–100 */
   progress: number;
+  /** Queue depth ahead of a PENDING task — the stage rail surfaces it when present. */
+  preceding_tasks?: number;
   /** 0 on FAILED tasks — Meshy auto-refunds. */
   consumed_credits?: number;
   model_urls?: Partial<Record<"glb" | "fbx" | "obj" | "usdz" | "stl", string>>;
