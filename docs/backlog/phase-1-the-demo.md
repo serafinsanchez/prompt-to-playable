@@ -5,7 +5,7 @@
 | # | Status | Kind | Item | Spec |
 |---|--------|------|------|------|
 | 1 | `[x]` | backend | TASK-11: Remesh stage in the pipeline state machine (55c graph) | [task-11-remesh-stage.md](../specs/task-11-remesh-stage.md) |
-| 2.1 | `[~]` | ui | US-01a: Playground stage + idling default character | [us-01a-playground-scene.md](../specs/us-01a-playground-scene.md) |
+| 2.1 | `[x]` | ui | US-01a: Playground stage + idling default character | [us-01a-playground-scene.md](../specs/us-01a-playground-scene.md) |
 | 2.2 | `[ ]` | ui | US-01b: Character controller — walk/run/jump/emote, camera follow | [us-01b-character-controller.md](../specs/us-01b-character-controller.md) |
 | 3.1 | `[ ]` | backend | TASK-06a: Pregen script + optimizer + manifest (offline-verified, knight seeded) | [task-06a-pregen-script.md](../specs/task-06a-pregen-script.md) |
 | 3.2 | `[!]` | backend | TASK-06b: Live gallery run — 8+ characters (**blocked: credit top-up**, email drafted in `scripts/spike/README.md`) | [task-06b-gallery-run.md](../specs/task-06b-gallery-run.md) |
