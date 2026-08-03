@@ -72,7 +72,11 @@ describe("meshy proxy route", () => {
       "http://localhost/api/meshy/openapi/v2/text-to-3d?page_size=10",
       {
         method: "POST",
-        headers: { "x-meshy-key": "msy_test", "Content-Type": "application/json" },
+        headers: {
+          "x-meshy-key": "msy_test",
+          "Content-Type": "application/json",
+          Cookie: "tracking=abc",
+        },
         body: JSON.stringify({ prompt: "knight" }),
       },
     );
@@ -82,7 +86,9 @@ describe("meshy proxy route", () => {
     expect(url).toBe("https://api.meshy.ai/openapi/v2/text-to-3d?page_size=10");
     const headers = new Headers(init.headers);
     expect(headers.get("authorization")).toBe("Bearer msy_test");
+    expect(headers.get("content-type")).toBe("application/json");
     expect(headers.get("x-meshy-key")).toBeNull();
+    expect(headers.get("cookie")).toBeNull();
     expect(init.method).toBe("POST");
     expect(init.body).toBe(JSON.stringify({ prompt: "knight" }));
     expect(await response.json()).toEqual({ result: "task-1" });

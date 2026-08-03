@@ -28,27 +28,26 @@ async function proxy(
   const key = request.headers.get("x-meshy-key");
   if (!key) return proxyError("missing key", 401);
 
-  const headers = new Headers(request.headers);
-  headers.delete("x-meshy-key");
-  headers.delete("host");
-  headers.set("Authorization", `Bearer ${key}`);
+  // Meshy needs exactly these two headers; nothing else crosses the boundary.
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
+  const contentType = request.headers.get("content-type");
+  if (contentType) headers["Content-Type"] = contentType;
 
   let upstream: Response;
-  let body: ArrayBuffer | null;
   try {
     upstream = await fetch(`${MESHY_API_BASE_URL}/${path}${new URL(request.url).search}`, {
       method: request.method,
       headers,
       ...(request.method === "GET" ? {} : { body: await request.text() }),
     });
-    // These statuses forbid a body; Response() throws if given one.
-    body = [204, 205, 304].includes(upstream.status) ? null : await upstream.arrayBuffer();
   } catch {
     console.error(`[meshy-proxy] network failure reaching Meshy: ${path}`);
     return proxyError("upstream network failure", 502);
   }
 
-  return new Response(body, {
+  // upstream.body is already null for null-body statuses (204/205/304), so
+  // streaming it through is correct for every status — no buffering.
+  return new Response(upstream.body, {
     status: upstream.status,
     headers: {
       "Content-Type": upstream.headers.get("content-type") ?? "application/json",
