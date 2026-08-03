@@ -41,6 +41,14 @@ _Untriaged items land here first._
 
 _P0 items triaged 2026-08-03 → `docs/backlog/phase-0-foundation.md` #1–#4. P1 items triaged 2026-08-03 → `docs/backlog/phase-1-the-demo.md` #1–#8 (originals in `docs/backlog/inbox-archive.md`)._
 
+### TASK-12: Collapse per-stage dispatch into a stage-descriptor table
+**Description:** Adding remesh (TASK-11) required six coordinated edits across `lib/meshy/types.ts` + `pipeline.ts` (`StageId`, `PIPELINE_STAGES`, `STAGE_CREDITS`, plus the `createStageTask`/`pollStageTask` if-chains), and the if-chains fall through to the animate default with no compiler protection. Replace them with a single per-stage descriptor table (credits + create/poll lambdas) so adding a stage is a one-row change. Behavior-preserving refactor.
+**Acceptance criteria:**
+- [ ] `createStageTask`/`pollStageTask` if-chains replaced by table dispatch; existing 44 tests pass unchanged
+- [ ] A stage exists in exactly one declaration site (credits, create, poll together)
+**Priority:** P1
+**Notes:** From the 2026-08-03 thermo-nuclear review of TASK-11. Schedule before or with US-06 (stage retry) — it's the next spec that touches this dispatch and will otherwise grow the if-chains again.
+
 ### Phase 2 — Polish + content + ship `[!]` (waiting for P1)
 
 ### US-07: Feel the signature stage-completion moment
