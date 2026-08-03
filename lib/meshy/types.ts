@@ -24,6 +24,28 @@ export interface MeshyTaskError {
   message: string;
 }
 
+/**
+ * Rigging and Animation tasks nest their outputs under `result` instead of
+ * `model_urls` (validated live in TASK-05 against docs.meshy.ai).
+ */
+export interface MeshyTaskResult {
+  rigged_character_glb_url?: string;
+  rigged_character_fbx_url?: string;
+  animation_glb_url?: string;
+  animation_fbx_url?: string;
+  basic_animations?: Partial<
+    Record<
+      | "walking_glb_url"
+      | "walking_fbx_url"
+      | "walking_armature_glb_url"
+      | "running_glb_url"
+      | "running_fbx_url"
+      | "running_armature_glb_url",
+      string
+    >
+  >;
+}
+
 /** Mirror of Meshy's async task object — the subset the pipeline reads. */
 export interface MeshyTask {
   id: string;
@@ -33,6 +55,8 @@ export interface MeshyTask {
   /** 0 on FAILED tasks — Meshy auto-refunds. */
   consumed_credits?: number;
   model_urls?: Partial<Record<"glb" | "fbx" | "obj" | "usdz" | "stl", string>>;
+  /** Present on rigging/animation retrieves; text-to-3d uses model_urls. */
+  result?: MeshyTaskResult;
   texture_urls?: Array<Record<string, string>>;
   thumbnail_url?: string;
   task_error?: MeshyTaskError;

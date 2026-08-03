@@ -15,7 +15,7 @@
  *                        upstream stage results/task ids for retry reuse
  */
 
-import type { MeshyClient } from "./client";
+import { taskGlbUrl, type MeshyClient } from "./client";
 import {
   ANIMATION_CLIPS,
   NoMoreConcurrentTasksError,
@@ -143,7 +143,7 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
       state.status = "succeeded";
       // consumed_credits is authoritative; fall back to the published price.
       state.creditCost = task.consumed_credits ?? STAGE_CREDITS[stage];
-      state.modelUrl = task.model_urls?.glb ?? null;
+      state.modelUrl = taskGlbUrl(task);
       state.completedAt = clock.now();
       recomputeCredits();
     } else if (task.status === "FAILED" || task.status === "CANCELED") {

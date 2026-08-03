@@ -14,7 +14,15 @@ import {
   RateLimitExceededError,
   type PipelineRun,
 } from "../types";
-import { failed, makeFixtureTransport, succeeded, task, type FixtureTable } from "./fixtures";
+import {
+  animationSucceeded,
+  failed,
+  makeFixtureTransport,
+  rigSucceeded,
+  succeeded,
+  task,
+  type FixtureTable,
+} from "./fixtures";
 
 function testClock(): { clock: { now(): number }; set(t: number): void } {
   let t = 0;
@@ -49,7 +57,7 @@ const ANIMATION_IDS = [
 /** POST/GET fixture entries for the five animate stages, in clip order. */
 const ANIMATION_FIXTURES: FixtureTable = {
   [`POST ${ANIMATIONS_PATH}`]: ANIMATION_IDS.map((id) => ({ body: { result: id } })),
-  [`GET ${ANIMATIONS_PATH}/:id`]: ANIMATION_IDS.map((id) => ({ body: succeeded(id, 3) })),
+  [`GET ${ANIMATIONS_PATH}/:id`]: ANIMATION_IDS.map((id) => ({ body: animationSucceeded(id, 3) })),
 };
 
 describe("createEmptyRun", () => {
@@ -77,7 +85,7 @@ describe("pipeline happy path", () => {
         { body: succeeded("refine-0002", 10) },
       ],
       [`POST ${RIGGING_PATH}`]: [{ body: { result: "rigging-0003" } }],
-      [`GET ${RIGGING_PATH}/:id`]: [{ body: succeeded("rigging-0003", 5) }],
+      [`GET ${RIGGING_PATH}/:id`]: [{ body: rigSucceeded("rigging-0003", 5) }],
       ...ANIMATION_FIXTURES,
     });
 
@@ -136,7 +144,7 @@ describe("pipeline happy path", () => {
     const animationCreates = calls.filter((c) => c.key === `POST ${ANIMATIONS_PATH}`);
     expect(animationCreates).toHaveLength(5);
     for (const create of animationCreates) {
-      expect(JSON.stringify(create.body)).toContain('"input_task_id":"rigging-0003"');
+      expect(JSON.stringify(create.body)).toContain('"rig_task_id":"rigging-0003"');
     }
 
     // All five clips succeed → run complete, 50 credits total.
@@ -315,7 +323,7 @@ describe("resume from storage", () => {
     expect(restored!.stages.rig.status).toBe("running");
 
     const { transport } = makeFixtureTransport({
-      [`GET ${RIGGING_PATH}/:id`]: [{ body: succeeded("rigging-0003", 5) }],
+      [`GET ${RIGGING_PATH}/:id`]: [{ body: rigSucceeded("rigging-0003", 5) }],
       ...ANIMATION_FIXTURES,
     });
     let t = 3 * POLL_INTERVAL_MS;

@@ -7,10 +7,17 @@ import {
   createMeshyClient,
   REMESH_PATH,
   RIGGING_PATH,
+  taskGlbUrl,
   TEXT_TO_3D_PATH,
 } from "../client";
 import { MeshyApiError } from "../types";
-import { makeFixtureTransport, succeeded } from "./fixtures";
+import {
+  animationSucceeded,
+  makeFixtureTransport,
+  rigSucceeded,
+  succeeded,
+  task,
+} from "./fixtures";
 
 describe("createMeshyClient", () => {
   it("createPreviewTask POSTs a v2 preview request and returns the task id", async () => {
@@ -66,7 +73,7 @@ describe("createMeshyClient", () => {
     expect(calls[0]!.body).toEqual({ input_task_id: "refine-0002" });
   });
 
-  it("createAnimationTask selects the clip's action via ANIMATION_CLIP_ACTIONS", async () => {
+  it("createAnimationTask sends rig_task_id + integer action_id (live v1/animations shape)", async () => {
     const { transport, calls } = makeFixtureTransport({
       [`POST ${ANIMATIONS_PATH}`]: [{ body: { result: "animate-0004" } }],
     });
@@ -75,9 +82,10 @@ describe("createMeshyClient", () => {
     const taskId = await client.createAnimationTask("rigging-0003", "emote");
 
     expect(taskId).toBe("animate-0004");
+    expect(typeof ANIMATION_CLIP_ACTIONS.emote).toBe("number");
     expect(calls[0]!.body).toEqual({
-      input_task_id: "rigging-0003",
-      action: ANIMATION_CLIP_ACTIONS.emote,
+      rig_task_id: "rigging-0003",
+      action_id: ANIMATION_CLIP_ACTIONS.emote,
     });
   });
 
@@ -91,6 +99,28 @@ describe("createMeshyClient", () => {
 
     expect(taskId).toBe("remesh-0005");
     expect(calls[0]!.body).toEqual({ input_task_id: "refine-0002", target_polycount: 30_000 });
+  });
+
+  it("taskGlbUrl reads model_urls.glb for text-to-3d tasks", () => {
+    expect(taskGlbUrl(succeeded("refine-0002", 10))).toBe(
+      "https://assets.meshy.test/refine-0002.glb",
+    );
+  });
+
+  it("taskGlbUrl reads result.rigged_character_glb_url for rigging tasks", () => {
+    expect(taskGlbUrl(rigSucceeded("rigging-0003", 5))).toBe(
+      "https://assets.meshy.test/rigging-0003.glb",
+    );
+  });
+
+  it("taskGlbUrl reads result.animation_glb_url for animation tasks", () => {
+    expect(taskGlbUrl(animationSucceeded("animate-0004", 3))).toBe(
+      "https://assets.meshy.test/animate-0004.glb",
+    );
+  });
+
+  it("taskGlbUrl is null when a task carries no GLB", () => {
+    expect(taskGlbUrl(task("preview-0001", "IN_PROGRESS"))).toBeNull();
   });
 
   it("getBalance reads the free balance endpoint", async () => {

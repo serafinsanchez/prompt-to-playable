@@ -76,8 +76,8 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 - Dev/CI use Meshy's test-mode key (`msy_dummy_api_key_for_test_mode_12345678`) — zero credits consumed.
 
 ### Pipeline orchestration (the load-bearing area)
-- Stage graph: `preview(20c) → refine+PBR(10c) → rig(5c) → animate ×5 clips(3c each)` = **50 credits/character**. Optional remesh(5c) inserted before rig only if poly count demands it — decided during the day-0 spike.
-- Chaining is always by `input_task_id` / `preview_task_id` — never download-and-reupload.
+- Stage graph: `preview(20c) → refine+PBR(10c) → remesh(5c) → rig(5c) → animate ×5 clips(3c each)` = **55 credits/character**. Remesh is mandatory, not optional — refine outputs ~583k tris and rigging rejects >300k faces (day-0 spike, Trade-off log 2026-08-03).
+- Chaining is always by task id (`preview_task_id` / `input_task_id` / `rig_task_id` for animations) — never download-and-reupload.
 - **Progress: poll every ~4s** through the proxy; Meshy's 0–100 `progress` field animates the stage rail. SSE consciously rejected (see Trade-off log).
 - Failure at any stage: halt pipeline, surface Meshy's `task_error` verbatim + note that failed tasks auto-refund (a DevEx teaching moment). Retry = re-run stage; upstream completed stages are reusable via stored task ids.
 - 429 handling distinguishes `RateLimitExceeded` (exponential back-off, auto-retry) from `NoMoreConcurrentTasks` (surface "Meshy queue full — waiting", keep polling). Different copy, different behavior.
@@ -124,11 +124,14 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 
 ### Deferred decisions
 
-| Decision | Revisit deadline | Owner |
-|---|---|---|
-| drei ecctrl vs hand-rolled rapier controller | Day-0 spike / first scene spec | builder |
-| Remesh stage in live pipeline | Day-0 spike (poly counts of refined outputs) | builder |
-| KTX2 texture compression (beyond meshopt) | Only if first-frame budget fails | builder |
+All three resolved by the day-0 spike (2026-08-03) — see the Trade-off log
+entry and `scripts/spike/README.md` for evidence.
+
+| Decision | Resolution |
+|---|---|
+| drei ecctrl vs hand-rolled rapier controller | **ecctrl first.** Clips are clean standard locomotion (idle/walk/run/jump loops on one skeleton, no retargeting, no root-motion surprises) — nothing demands bespoke physics. Hand-rolled rapier remains the documented fallback if ecctrl's clip-blending hooks fight the 5-clip set at scene-spec time. |
+| Remesh stage in live pipeline | **Yes — mandatory, not optional.** Refine outputs ~583k tris; rigging hard-rejects >300k faces (400). Live graph is preview → refine → remesh(30k) → rig → animate ×5 = 55c/character. |
+| KTX2 texture compression (beyond meshopt) | **Yes for gallery pregen.** Raw GLBs are ~8.5 MB at 29k tris (textures dominate); one character alone busts the <5s first-frame budget on ordinary broadband. Pregen pass: meshopt + texture resize + KTX2. Live-generation downloads stay raw (user already waited minutes; a 8.5 MB fetch is fine). |
 
 ### Known wrong choices we're shipping anyway
 
@@ -140,6 +143,14 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 ## 6. Trade-off log
 
 Append-only. Newest at the top.
+
+### 2026-08-03 — Day-0 spike outcome: 5-clip merge holds; remesh stage mandatory
+- **Chose:** keep the 5-clip plan (idle/walk/run/jump/emote as separate Animation tasks, merged client-side) — validated live, no fallback invoked. Insert remesh(30k) between refine and rig permanently. Pipeline = preview → refine → remesh → rig → animate ×5, **55c/character** (was 50).
+- **Evidence:** one knight end-to-end; rig first-try success; all 5 clips bind to the rig skeleton with zero missing track targets and play via one AnimationMixer in `/spike` (`scripts/spike/README.md`).
+- **Live-API corrections baked into `lib/meshy/`:** animations create is `{rig_task_id, action_id:int}` (action ids: idle 0, walk 30, run 14, jump 466, emote 28); rig/animate GLBs nest under `result.*` (`taskGlbUrl()` absorbs the shape split); rigging rejects >300k faces.
+- **Operational findings:** shared remesh queue can hold a task `PENDING` for hours at peak (`preceding_tasks` 477–532 observed) — the stage rail should surface queue depth; raw GLBs are ~8.5 MB (textures dominate) → gallery pregen gets meshopt + KTX2; test-mode key cannot exercise rig/animate (dummy mesh fails pose estimation).
+- **Credit reality:** balance 130 after spike (55c spent). Gallery at 8–12 × 55c = 440–660c does not fit — credit-request email drafted in `scripts/spike/README.md` (bet #3's trigger fired).
+- **Reversibility:** n/a — evidence entry resolving the three deferred decisions above.
 
 ### 2026-08-03 — Progress transport: polling over SSE
 - **Chose:** GET task every ~4s through the proxy.

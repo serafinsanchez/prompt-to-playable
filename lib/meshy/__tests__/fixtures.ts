@@ -70,3 +70,19 @@ export function failed(id: string, message: string): MeshyTask {
   // consumed_credits is always 0 on FAILED — Meshy auto-refunds.
   return task(id, "FAILED", { consumed_credits: 0, task_error: { message } });
 }
+
+/** Rigging tasks return GLBs under `result.rigged_character_glb_url`, not `model_urls`. */
+export function rigSucceeded(id: string, credits: number): MeshyTask {
+  return task(id, "SUCCEEDED", {
+    consumed_credits: credits,
+    result: { rigged_character_glb_url: `https://assets.meshy.test/${id}.glb` },
+  });
+}
+
+/** Animation tasks return GLBs under `result.animation_glb_url`, not `model_urls`. */
+export function animationSucceeded(id: string, credits: number): MeshyTask {
+  return task(id, "SUCCEEDED", {
+    consumed_credits: credits,
+    result: { animation_glb_url: `https://assets.meshy.test/${id}.glb` },
+  });
+}

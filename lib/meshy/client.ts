@@ -16,18 +16,32 @@ export const REMESH_PATH = "/openapi/v1/remesh";
 export const BALANCE_PATH = "/openapi/v1/balance";
 
 /**
- * Meshy action selectors for the five locomotion clips, in one place so
- * TASK-05 (the day-0 spike) can correct ids against live API output without
- * touching any pipeline logic. `v1/animations` is the least-documented
- * endpoint — treat these values as provisional until validated live.
+ * Meshy animation-library action ids for the five locomotion clips
+ * (docs.meshy.ai Animation Library Reference, validated in TASK-05).
+ * `v1/animations` takes `rig_task_id` + integer `action_id` — not the
+ * `input_task_id`/`action` string shape the other chained endpoints use.
  */
-export const ANIMATION_CLIP_ACTIONS: Record<AnimationClip, string> = {
-  idle: "idle",
-  walk: "walk",
-  run: "run",
-  jump: "jump",
-  emote: "wave",
+export const ANIMATION_CLIP_ACTIONS: Record<AnimationClip, number> = {
+  idle: 0, // Idle
+  walk: 30, // Casual_Walk
+  run: 14, // Run_02
+  jump: 466, // Regular_Jump
+  emote: 28, // Big_Wave_Hello
 };
+
+/**
+ * Where a task's GLB lives depends on the endpoint family: text-to-3d (and
+ * remesh) publish `model_urls.glb`; rigging and animation nest URLs under
+ * `result`. One extractor so the pipeline stays shape-agnostic.
+ */
+export function taskGlbUrl(task: MeshyTask): string | null {
+  return (
+    task.model_urls?.glb ??
+    task.result?.rigged_character_glb_url ??
+    task.result?.animation_glb_url ??
+    null
+  );
+}
 
 export interface MeshyClient {
   /** POST v2 text-to-3d { mode: "preview" } → task id. */
@@ -38,8 +52,8 @@ export interface MeshyClient {
   /** POST v1 rigging chained by input_task_id → task id. */
   createRigTask(inputTaskId: string): Promise<string>;
   getRigTask(taskId: string): Promise<MeshyTask>;
-  /** POST v1 animations chained by input_task_id for one clip → task id. */
-  createAnimationTask(inputTaskId: string, clip: AnimationClip): Promise<string>;
+  /** POST v1 animations chained by rig_task_id for one clip → task id. */
+  createAnimationTask(rigTaskId: string, clip: AnimationClip): Promise<string>;
   getAnimationTask(taskId: string): Promise<MeshyTask>;
   /** POST v1 remesh chained by input_task_id → task id (optional stage, spike-decided). */
   createRemeshTask(inputTaskId: string, targetPolycount?: number): Promise<string>;
@@ -76,10 +90,10 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
     getTextTo3DTask: (taskId) => get(TEXT_TO_3D_PATH, taskId),
     createRigTask: (inputTaskId) => create(RIGGING_PATH, { input_task_id: inputTaskId }),
     getRigTask: (taskId) => get(RIGGING_PATH, taskId),
-    createAnimationTask: (inputTaskId, clip) =>
+    createAnimationTask: (rigTaskId, clip) =>
       create(ANIMATIONS_PATH, {
-        input_task_id: inputTaskId,
-        action: ANIMATION_CLIP_ACTIONS[clip],
+        rig_task_id: rigTaskId,
+        action_id: ANIMATION_CLIP_ACTIONS[clip],
       }),
     getAnimationTask: (taskId) => get(ANIMATIONS_PATH, taskId),
     createRemeshTask: (inputTaskId, targetPolycount) =>
