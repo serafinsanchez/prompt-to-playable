@@ -10,8 +10,14 @@
  * clipped by its own scroll container.
  *
  * The dialog owns its step index. StageRail mounts it only while open, so the
- * initialIndex prop is read once per open and no callback identity has to be
- * stable across renders.
+ * initialIndex prop is read once per open. `onClose`, however, is NOT stable
+ * across renders: StageRail passes a fresh inline closure, and its own
+ * `run` selector yields a new reference on every ~4s poll tick while a run
+ * is active. If the focus-trap effect below depended on `onClose` directly,
+ * it would tear down and rebuild on every tick — yanking focus out to the
+ * opener and back in, visibly, while the dialog is open. `onClose` is read
+ * through a ref instead, so the effect's dependency array is `[]` and setup
+ * / teardown happen only on true mount / unmount.
  *
  * Hand-rolled focus trap — no new packages (CLAUDE.md). DESIGN.md forbids
  * backdrop-blur and shadows: the scrim is a flat tint, depth is the elevated
@@ -37,6 +43,15 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const artifact = artifacts[index];
+
+  // Always the latest onClose, read by the mount-only effect below — see the
+  // file header for why this can't just be an effect dependency. Updated in
+  // its own effect (no deps: runs after every render) rather than during
+  // render itself, which React forbids for ref writes.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   // No pre-rendered PNG (legacy run, or a task Meshy never rendered): take a
   // one-shot 512px snapshot through the shared offscreen renderer — the same
@@ -69,7 +84,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || node === null) return;
@@ -91,7 +106,8 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
       document.removeEventListener("keydown", onKeyDown);
       opener?.focus();
     };
-  }, [onClose]);
+    // Mount/unmount only — see file header and the onCloseRef comment above.
+  }, []);
 
   // Every hook above runs unconditionally — React requires stable hook order,
   // so this guard cannot move up.
