@@ -32,7 +32,7 @@ Every triaged spec gets one. Drives which execution skill runs and which verific
 | Phase | Theme | Status | Work items |
 |-------|-------|--------|------------|
 | P0 | Foundation — prove the pipeline, stand the stage | **Complete** — 0 open / 4 done | `docs/backlog/phase-0-foundation.md` |
-| P1 | The demo — playable gallery + live generation | **Open** — 4 open / 6 done, triaged 2026-08-03 | `docs/backlog/phase-1-the-demo.md` |
+| P1 | The demo — playable gallery + live generation | **Open** — 4 open / 7 done, triaged 2026-08-03 | `docs/backlog/phase-1-the-demo.md` |
 | P2 | Polish + content + ship | Planned — items in Inbox | — |
 
 ## Inbox
