@@ -3,9 +3,10 @@
 /**
  * US-05 completion state: the payoff receipt, "Play it", and the download
  * disclosure. Renders only for a succeeded run. Downloads are plain anchors
- * straight at Meshy's signed URLs — no client-side transform pass
- * (ARCHITECTURE §5), no proxy involvement. Past Meshy's ~3-day retention
- * the whole block degrades to honest copy instead of broken buttons.
+ * at the same-origin asset-proxy form of Meshy's signed URLs (assets.meshy.ai
+ * is CORS-opaque; lib/meshy/assets.ts) — no client-side transform pass
+ * (ARCHITECTURE §5). Past Meshy's ~3-day retention the whole block degrades
+ * to honest copy instead of broken buttons.
  */
 
 import { useEffect, useId, useState } from "react";
@@ -58,8 +59,8 @@ export function CompletionActions({
       data-testid="completion"
       className="flex flex-col gap-3 rounded-md border border-border bg-elevated p-3 transition-[opacity,translate] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none"
     >
-      {/* Your character finally gets a name — the prompt, in display type. */}
-      <h3 className="truncate font-display text-base font-extrabold tracking-display">
+      {/* Your character finally gets a name — the prompt, in display type, whole. */}
+      <h3 className="break-words font-display text-base font-extrabold tracking-display">
         {run.prompt}
       </h3>
       <p

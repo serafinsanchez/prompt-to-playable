@@ -192,6 +192,24 @@ describe("pipeline happy path", () => {
   });
 });
 
+describe("asset URL isomorphism", () => {
+  it("stores the raw signed URL untouched — Node callers (pregen/spike) fetch it directly", async () => {
+    const signed =
+      "https://assets.meshy.ai/uid/tasks/preview-0001/output/model.glb?Expires=1&Signature=s__&Key-Pair-Id=K1";
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [{ body: succeeded("preview-0001", 20, signed) }],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick(); // create preview
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick(); // poll → succeeded
+
+    expect(pipeline.getRun().stages.preview.modelUrl).toBe(signed);
+  });
+});
+
 describe("queue depth (preceding_tasks)", () => {
   it("mirrors preceding_tasks into the stage snapshot while PENDING and clears it after", async () => {
     const { pipeline, set } = pipelineWith({

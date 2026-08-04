@@ -57,7 +57,9 @@ export function useGallery(): {
 
   const preload = (entry: GalleryEntry) => {
     useGLTF.preload(entry.glbPath);
-    for (const clip of CLIP_NAMES) useGLTF.preload(entry.clipPaths[clip]);
+    // Array form — useBoundCharacter suspends on useGLTF(clipUrls), whose
+    // cache key is the whole array; per-URL preloads would never be read.
+    useGLTF.preload(CLIP_NAMES.map((clip) => entry.clipPaths[clip]));
   };
 
   const select = (entry: GalleryEntry) => {

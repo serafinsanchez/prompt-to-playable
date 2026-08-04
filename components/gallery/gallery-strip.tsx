@@ -86,7 +86,10 @@ function GalleryCard({
           </span>
         )}
       </span>
-      <span className="mt-1 block truncate font-sans text-xs text-muted">{entry.prompt}</span>
+      {/* Active card shows the whole prompt (it's the one being read); others stay one-line. */}
+      <span className={`mt-1 block font-sans text-xs text-muted ${active ? "break-words" : "truncate"}`}>
+        {entry.prompt}
+      </span>
       <span className="mt-2 block font-mono text-xs uppercase tracking-caps text-foreground">
         {formatReceipt(entry)}
       </span>
@@ -114,7 +117,7 @@ export function GalleryStrip({
       className="pointer-events-none fixed inset-x-0 top-24 px-4 md:absolute md:inset-x-auto md:right-6 md:top-24 md:bottom-auto md:w-64 md:px-0"
     >
       <h2 className="sr-only">Character gallery</h2>
-      <div className="pointer-events-auto flex max-w-full gap-3 overflow-x-auto pb-2 md:max-h-[70dvh] md:flex-col md:overflow-x-visible md:overflow-y-auto md:pb-0">
+      <div className="pointer-events-auto flex max-w-full items-start gap-3 overflow-x-auto pb-2 md:max-h-[70dvh] md:flex-col md:overflow-x-visible md:overflow-y-auto md:pb-0">
         {status.state === "loading" && (
           <p className="font-mono text-xs uppercase tracking-caps text-muted">
             Reading the gallery manifest.

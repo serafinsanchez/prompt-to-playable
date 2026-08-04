@@ -93,6 +93,34 @@ describe("generateCharacter happy path", () => {
   });
 });
 
+describe("generateCharacter URL contract", () => {
+  it("hands fetchGlb absolute URLs even for real assets.meshy.ai hosts — Node fetch has no base URL", async () => {
+    // The browser proxies assets.meshy.ai URLs same-origin (lib/meshy/assets.ts);
+    // that rewrite must never leak into the isomorphic pipeline state this
+    // Node runner downloads from (ARCHITECTURE §3 module table).
+    const signed = (id: string) =>
+      `https://assets.meshy.ai/uid/tasks/${id}/output/model.glb?Expires=1&Signature=s__&Key-Pair-Id=K1`;
+    const table = {
+      ...happyTable(),
+      [`GET ${RIGGING_PATH}/:id`]: [
+        { body: task("rigging-0009", "SUCCEEDED", { consumed_credits: 5, result: { rigged_character_glb_url: signed("rigging-0009") } }) },
+      ],
+      [`GET ${ANIMATIONS_PATH}/:id`]: ANIMATION_IDS.map((id) => ({
+        body: task(id, "SUCCEEDED", { consumed_credits: 3, result: { animation_glb_url: signed(id) } }),
+      })),
+    };
+    const { deps, fetched } = testDeps(table);
+
+    await generateCharacter(SPEC, deps);
+
+    expect(fetched).toHaveLength(6);
+    for (const url of fetched) {
+      expect(() => new URL(url)).not.toThrow(); // relative /api/... would throw here, as in Node fetch
+      expect(url).toMatch(/^https:\/\/assets\.meshy\.ai\//);
+    }
+  });
+});
+
 describe("generateCharacter resume", () => {
   it("resumes a stored run without re-creating paid tasks", async () => {
     // Stored state: linear head already succeeded (paid for), animates pending.

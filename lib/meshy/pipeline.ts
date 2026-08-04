@@ -199,6 +199,8 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
       state.status = "succeeded";
       // consumed_credits is authoritative; fall back to the published price.
       state.creditCost = task.consumed_credits ?? STAGE_CREDITS[stage];
+      // Raw signed URL — state stays isomorphic (Node pregen/spike fetch it
+      // directly); browser consumers proxy it at their boundary (assets.ts).
       state.modelUrl = taskGlbUrl(task);
       state.completedAt = clock.now();
       recomputeCredits();

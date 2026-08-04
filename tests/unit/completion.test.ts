@@ -89,6 +89,25 @@ describe("generatedCharacterSource", () => {
     }
   });
 
+  it("proxies real assets.meshy.ai URLs — browsers cannot fetch them cross-origin", () => {
+    const run = succeededRun();
+    const signed = (id: string) =>
+      `https://assets.meshy.ai/uid/tasks/${id}/output/model.glb?Expires=1&Signature=s__&Key-Pair-Id=K1`;
+    run.stages.rig.modelUrl = signed("rig");
+    for (const clip of ANIMATION_CLIPS) {
+      run.stages[`animate:${clip}`].modelUrl = signed(clip);
+    }
+
+    const source = generatedCharacterSource(run);
+
+    expect(source?.rig).toBe(`/api/meshy-asset?url=${encodeURIComponent(signed("rig"))}`);
+    for (const clip of ANIMATION_CLIPS) {
+      expect(source?.clips[clip]).toBe(
+        `/api/meshy-asset?url=${encodeURIComponent(signed(clip))}`,
+      );
+    }
+  });
+
   it("returns null when the rig URL is missing", () => {
     const run = succeededRun();
     run.stages.rig.modelUrl = null;
@@ -117,6 +136,17 @@ describe("downloadPlan", () => {
     expect(plan.slice(1).map((entry) => entry.shortName)).toEqual(
       ANIMATION_CLIPS.map((clip) => `${clip}.glb`),
     );
+  });
+
+  it("proxies real assets.meshy.ai URLs so the download attribute is honored same-origin", () => {
+    const run = succeededRun();
+    const signed =
+      "https://assets.meshy.ai/uid/tasks/rig/output/model.glb?Expires=1&Signature=s__&Key-Pair-Id=K1";
+    run.stages.rig.modelUrl = signed;
+
+    const plan = downloadPlan(run);
+
+    expect(plan[0]?.url).toBe(`/api/meshy-asset?url=${encodeURIComponent(signed)}`);
   });
 
   it("omits entries whose stage never produced a URL", () => {

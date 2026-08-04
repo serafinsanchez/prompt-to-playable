@@ -109,7 +109,9 @@ function useGeneratedCharacter(gallerySource: CharacterSource | null): {
   const play = () => {
     if (generated === null || run?.startedAt == null) return;
     useGLTF.preload(generated.rig);
-    for (const clip of CLIP_NAMES) useGLTF.preload(generated.clips[clip]);
+    // Array form — useBoundCharacter suspends on useGLTF(clipUrls), whose
+    // cache key is the whole array; per-URL preloads would never be read.
+    useGLTF.preload(CLIP_NAMES.map((clip) => generated.clips[clip]));
     const startedAt = run.startedAt;
     // Transition: the outgoing character stays on stage while the generated
     // GLBs suspend — same no-gap swap as the gallery (US-02).
@@ -125,9 +127,26 @@ function useGeneratedCharacter(gallerySource: CharacterSource | null): {
   };
 }
 
+/**
+ * drei caches GLB load *rejections* forever (suspend-react has no eviction),
+ * so without this a retried Play would re-throw the stale error instantly.
+ * Clear both cache keys useBoundCharacter reads: the rig and the clip array.
+ */
+function evictCharacterCache(source: CharacterSource): void {
+  useGLTF.clear(source.rig);
+  useGLTF.clear(CLIP_NAMES.map((clip) => source.clips[clip]));
+}
+
 export default function Home() {
   const gallery = useGallery();
   const generated = useGeneratedCharacter(gallery.source);
+
+  // Failed load: evict the poisoned cache entries so a later attempt can
+  // actually refetch, then hand the stage back to the gallery.
+  const handleCharacterError = () => {
+    if (generated.character !== null) evictCharacterCache(generated.character);
+    generated.release();
+  };
 
   // Picking a gallery card hands the stage back — "your character" stays one
   // click away in the completion block for the rest of the session.
@@ -138,7 +157,9 @@ export default function Home() {
 
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      <Playground character={generated.character} />
+      {/* On a failed character load (expired assets, network) hand the stage
+          back to the gallery instead of letting the error unmount the app. */}
+      <Playground character={generated.character} onCharacterError={handleCharacterError} />
 
       {/* Thin overlay chrome — the scene is the hero (DESIGN.md). */}
       <header className="pointer-events-none absolute inset-x-0 top-0">

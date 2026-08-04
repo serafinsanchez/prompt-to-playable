@@ -4,8 +4,10 @@
  * Intermediate artifact preview (US-03b): a tiny one-shot GLB render. One
  * shared offscreen WebGLRenderer snapshots the mesh to a data URL, then the
  * GL context is left idle — no per-thumbnail canvases competing with the
- * playground scene. Load failures (CORS, expired Meshy URL, fixture URLs in
- * tests) degrade to an iconographic cube; the rail never breaks on assets.
+ * playground scene. Live URLs arrive already proxied same-origin
+ * (lib/meshy/assets.ts — assets.meshy.ai is CORS-opaque). Load failures
+ * (expired Meshy URL, fixture URLs in tests) degrade to an iconographic
+ * cube; the rail never breaks on assets.
  */
 
 import { useEffect, useState } from "react";

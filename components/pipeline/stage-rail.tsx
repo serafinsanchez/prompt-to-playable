@@ -15,6 +15,7 @@
  */
 
 import { useState } from "react";
+import { proxiedAssetUrl } from "../../lib/meshy/assets";
 import {
   ANIMATION_CLIPS,
   type PipelineRun,
@@ -105,7 +106,8 @@ function StageRow({
           </span>
         )}
         {kind === "succeeded" && MESH_STAGES.has(state.stage) && state.modelUrl !== null && (
-          <ArtifactThumbnail url={state.modelUrl} label={state.stage} />
+          // Proxy form at the boundary — state holds the raw signed URL.
+          <ArtifactThumbnail url={proxiedAssetUrl(state.modelUrl)} label={state.stage} />
         )}
         {/* Caret — the only affordance hint; rotates open, transform-only. */}
         <svg

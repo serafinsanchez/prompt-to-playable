@@ -4,6 +4,7 @@ import { ContactShadows, KeyboardControls, useProgress } from "@react-three/drei
 import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { Suspense, useEffect, useState } from "react";
+import { CharacterBoundary } from "./character-boundary";
 import type { CharacterSource } from "./clip-binding";
 import { SCENE_COLOR } from "./colors";
 import { ControlledCharacter } from "./controlled-character";
@@ -90,7 +91,14 @@ function LoadingVeil() {
  * is null only while the gallery manifest resolves (US-02) — the stage
  * renders and the knight drops in the moment a source exists.
  */
-export function Playground({ character }: { character: CharacterSource | null }) {
+export function Playground({
+  character,
+  onCharacterError,
+}: {
+  character: CharacterSource | null;
+  /** A character GLB failed to load — the page decides who takes the stage. */
+  onCharacterError?: (error: Error) => void;
+}) {
   return (
     <div className="absolute inset-0">
       <Canvas
@@ -103,7 +111,12 @@ export function Playground({ character }: { character: CharacterSource | null })
           <Suspense fallback={null}>
             {/* Fixed timestep: GLB-parse frame stalls must not tunnel the capsule through the floor. */}
             <Physics>
-              {character && <ControlledCharacter source={character} />}
+              {character && (
+                // Keyed by rig so a source swap remounts the boundary clean.
+                <CharacterBoundary key={character.rig} onError={onCharacterError}>
+                  <ControlledCharacter source={character} />
+                </CharacterBoundary>
+              )}
             </Physics>
           </Suspense>
         </KeyboardControls>

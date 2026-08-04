@@ -6,6 +6,7 @@
  * copy instead of broken buttons.
  */
 
+import { proxiedAssetUrl } from "../../lib/meshy/assets";
 import {
   ANIMATION_CLIPS,
   type AnimationClip,
@@ -42,9 +43,11 @@ export function generatedCharacterSource(run: PipelineRun): CharacterSource | nu
   for (const clip of ANIMATION_CLIPS) {
     const url = run.stages[`animate:${clip}`].modelUrl;
     if (url === null) return null;
-    clips[clip] = url;
+    // State holds raw signed URLs (isomorphic — Node pregen fetches them);
+    // the browser loader needs the same-origin proxy form (CORS).
+    clips[clip] = proxiedAssetUrl(url);
   }
-  return { rig, clips: clips as Record<AnimationClip, string> };
+  return { rig: proxiedAssetUrl(rig), clips: clips as Record<AnimationClip, string> };
 }
 
 export interface DownloadEntry {
@@ -71,7 +74,8 @@ export function downloadPlan(run: PipelineRun): DownloadEntry[] {
       label: "the character",
       shortName: "rig.glb",
       filename: `${slug}-rig.glb`,
-      url: rig,
+      // Proxy form: same-origin, which is also what makes `download` honored.
+      url: proxiedAssetUrl(rig),
     });
   }
   for (const clip of ANIMATION_CLIPS) {
@@ -81,7 +85,7 @@ export function downloadPlan(run: PipelineRun): DownloadEntry[] {
         label: `${clip} clip`,
         shortName: `${clip}.glb`,
         filename: `${slug}-${clip}.glb`,
-        url,
+        url: proxiedAssetUrl(url),
       });
     }
   }

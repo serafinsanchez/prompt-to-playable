@@ -58,13 +58,14 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 |---|---|---|---|
 | `lib/meshy/` | Typed Meshy client, pipeline state machine, polling loop | `runPipeline()`, `resumePipeline()`, stage/task types | Web app, `scripts/pregen/`, `scripts/spike/` (isomorphic — any Node script via the direct transport; the pregen script doubles as the "integration code" teaching artifact) |
 | `app/api/meshy/[...path]/` | Proxy: header rewrite, passthrough, error mapping | Same surface as Meshy REST (v1 + v2) | `lib/meshy/` client (browser transport) |
+| `app/api/meshy-asset/` | GET-only asset passthrough: single-host allowlist (`assets.meshy.ai`), no key, redirects refused | `?url=` → streamed asset bytes | Browser loaders only — thumbnails, clip binding, downloads (via the `lib/meshy/assets.ts` rewrite applied at consumption boundaries; pipeline state keeps raw signed URLs so Node callers fetch directly) |
 | `components/pipeline/` | Stage rail UI, API-call panel, key entry | React components | `app/page.tsx` |
 | `components/scene/` | R3F canvas, playground, character controller, clip binding | `<Playground character={...}>` | `app/page.tsx` |
 | `scripts/pregen/` | Gallery generation + gltf-transform optimization + manifest | `npm run pregen` | Build-time only |
 
 - **API style:** the proxy mirrors Meshy's REST exactly — no invented surface. `POST/GET /api/meshy/openapi/v2/text-to-3d[...]` etc. Rationale: the on-screen API panel shows *real Meshy paths*, and the proxy stays a 30-line passthrough instead of a bespoke API.
 - **Error envelope:** Meshy's own error bodies pass through untouched; proxy adds `{ proxyError }` only for its own failures (missing key header, network).
-- **Public/internal split:** everything public; the proxy refuses requests without a key header and allowlists Meshy paths only (no open proxy).
+- **Public/internal split:** everything public; the REST proxy refuses requests without a key header and allowlists Meshy paths only; the asset proxy is keyless by design (the signed query *is* the capability) and allowlists exactly one host with redirects refused (no open proxy either way).
 
 ---
 
@@ -85,10 +86,12 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 
 ### Caching
 - Gallery GLBs: immutable static assets, long-lived cache headers (hashed filenames).
-- Proxy responses: `no-store` — task state must always be fresh.
+- REST proxy responses: `no-store` — task state must always be fresh.
+- Asset proxy responses: `public, max-age=31536000, immutable` on success (a signed URL's content never changes; the cache key embeds the signature), `no-store` on error so a transient 403 is never pinned.
 
 ### Rate limiting (ours)
-- None for V1. The proxy only forwards to Meshy with the caller's own key; Meshy's per-account limits are the real limiter. Revisit only if the demo goes viral enough to get the proxy abused as an open relay — path allowlist already blocks non-Meshy targets.
+- None for V1. The REST proxy only forwards to Meshy with the caller's own key; Meshy's per-account limits are the real limiter. Revisit only if the demo goes viral enough to get the proxy abused as an open relay — path allowlist already blocks non-Meshy targets.
+- The asset proxy is a partial exception, accepted for a demo: it is keyless, so abuse is bounded by *our* Vercel egress rather than the abuser's Meshy credits. Mitigations in place: single-host allowlist, redirects refused, and only holders of a valid signed URL (a bearer capability that expires in ~3 days) can fetch anything at all — unsigned requests get Meshy's 403, returned `no-store`.
 
 ### Secrets
 - Server env: none required for runtime (proxy uses caller's key). Pregen script reads `MESHY_API_KEY` from local env only; never deployed.
@@ -114,6 +117,7 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 | Client-side orchestration (no server jobs) | medium — server orchestration would need a queue + state store |
 | Proxy mirrors Meshy paths (no bespoke API) | easy |
 | Self-hosted pregen gallery | easy |
+| Same-origin asset proxy for live assets | easy — one rewrite function (`lib/meshy/assets.ts`) applied at three browser consumption sites |
 | 5-clip merge onto one skeleton | **hard mid-build** — the controller, scene, and credit budget all assume it → de-risked by day-0 spike |
 
 ### Bets we're making
@@ -176,3 +180,9 @@ Append-only. Newest at the top.
 - **Considered:** hotlinking Meshy asset URLs (expire in 3 days — disqualified); runtime generation for gallery (slow, credit-hungry, kills the 15s metric).
 - **Reason:** instant payoff, immutable caching, and the script doubles as published example code.
 - **Reversibility:** easy. — **Related:** PRD §5 primary + counter-metric.
+
+### 2026-08-03 — Asset downloads go through a same-origin asset proxy
+- **Chose:** `/api/meshy-asset?url=` GET-only passthrough allowlisting exactly `https://assets.meshy.ai` (redirects refused); asset URLs are rewritten to proxy form at the browser consumption boundaries (`lib/meshy/assets.ts`, applied in `completion.ts` and `stage-rail.tsx`) — pipeline state and storage keep raw signed URLs so `lib/meshy/` stays isomorphic and Node callers (`scripts/pregen/`, `scripts/spike/`) fetch directly.
+- **Considered:** fetching `assets.meshy.ai` directly from the browser (first live browser run proved it impossible — the asset host sends no `Access-Control-Allow-Origin`, so thumbnails silently degraded and the play swap-in crashed the page); widening the existing `/api/meshy/[...path]` allowlist (rejected — that proxy requires `x-meshy-key` and mirrors REST paths; asset URLs are their own auth via signed query).
+- **Reason:** the signed query is a bearer capability, so the proxy needs no key handling; strict single-host allowlist prevents SSRF; success responses are `immutable` so browser/CDN caches absorb the thumbnail → swap-in → download repeat loads. Bonus: same-origin URLs make the `download` attribute actually honored.
+- **Reversibility:** easy. — **Related:** US-05 CONTEXT CORS note ("verify, don't assume" — verified, it blocks); `CharacterBoundary` added so a failed character load (e.g. expired assets) degrades to the gallery instead of unmounting the app.
