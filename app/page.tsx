@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useGLTF } from "@react-three/drei";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react";
 import { GalleryStrip } from "@/components/gallery/gallery-strip";
+import type { GalleryEntry } from "@/scripts/pregen/manifest";
 import { useGallery } from "@/components/gallery/use-gallery";
+import { generatedCharacterSource } from "@/components/pipeline/completion";
 import { LivePipeline } from "@/components/pipeline/live-pipeline";
+import { usePipeline } from "@/components/pipeline/use-pipeline";
+import { CLIP_NAMES, type CharacterSource } from "@/components/scene/clip-binding";
 import { MOVEMENT_KEY_CODES } from "@/components/scene/controls";
 import { Playground } from "@/components/scene/playground";
 
@@ -71,12 +82,63 @@ function ControlHint() {
   );
 }
 
+/**
+ * US-05 stage arbitration: the generated character claims the stage only via
+ * an explicit "Play it" (never auto-swap — no scene hijack mid-control), and
+ * only for the run it was clicked on: `playingRunStart` pins the claim to
+ * run.startedAt, so start-over and fresh runs fall back to the gallery.
+ */
+function useGeneratedCharacter(gallerySource: CharacterSource | null): {
+  character: CharacterSource | null;
+  playing: boolean;
+  playPending: boolean;
+  play: () => void;
+  release: () => void;
+} {
+  const run = usePipeline((state) => state.run);
+  const [playingRunStart, setPlayingRunStart] = useState<number | null>(null);
+  const [playPending, startTransition] = useTransition();
+
+  const generated = useMemo(
+    () => (run?.status === "succeeded" ? generatedCharacterSource(run) : null),
+    [run],
+  );
+  const playing =
+    generated !== null && run?.startedAt !== null && run?.startedAt === playingRunStart;
+
+  const play = () => {
+    if (generated === null || run?.startedAt == null) return;
+    useGLTF.preload(generated.rig);
+    for (const clip of CLIP_NAMES) useGLTF.preload(generated.clips[clip]);
+    const startedAt = run.startedAt;
+    // Transition: the outgoing character stays on stage while the generated
+    // GLBs suspend — same no-gap swap as the gallery (US-02).
+    startTransition(() => setPlayingRunStart(startedAt));
+  };
+
+  return {
+    character: playing ? generated : gallerySource,
+    playing,
+    playPending,
+    play,
+    release: () => setPlayingRunStart(null),
+  };
+}
+
 export default function Home() {
   const gallery = useGallery();
+  const generated = useGeneratedCharacter(gallery.source);
+
+  // Picking a gallery card hands the stage back — "your character" stays one
+  // click away in the completion block for the rest of the session.
+  const selectGalleryEntry = (entry: GalleryEntry) => {
+    generated.release();
+    gallery.select(entry);
+  };
 
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      <Playground character={gallery.source} />
+      <Playground character={generated.character} />
 
       {/* Thin overlay chrome — the scene is the hero (DESIGN.md). */}
       <header className="pointer-events-none absolute inset-x-0 top-0">
@@ -92,17 +154,22 @@ export default function Home() {
 
       <ControlHint />
 
-      {/* US-02: browse the pregen gallery, swap the stage character in place */}
+      {/* US-02: browse the pregen gallery, swap the stage character in place.
+          While the generated character holds the stage, no card claims it. */}
       <GalleryStrip
         status={gallery.status}
-        activeSlug={gallery.activeSlug ?? ""}
+        activeSlug={generated.playing ? "" : (gallery.activeSlug ?? "")}
         pendingSlug={gallery.pendingSlug}
-        onSelect={gallery.select}
+        onSelect={selectGalleryEntry}
         onPreload={gallery.preload}
       />
 
       {/* US-03a/US-03b: live pipeline (key entry, prompt, stage rail) */}
-      <LivePipeline />
+      <LivePipeline
+        playingGenerated={generated.playing}
+        onPlayGenerated={generated.play}
+        playPending={generated.playPending}
+      />
     </main>
   );
 }

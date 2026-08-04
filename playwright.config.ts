@@ -14,6 +14,7 @@ export default defineConfig({
     "stage-rail.spec.ts",
     "api-panel.spec.ts",
     "gallery.spec.ts",
+    "completion.spec.ts",
   ],
   use: {
     baseURL: `http://localhost:${port}`,

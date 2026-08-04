@@ -9,13 +9,27 @@
  */
 
 import { useEffect } from "react";
+import { CompletionActions } from "./completion-actions";
 import { KeyEntry } from "./key-entry";
 import { PromptBar } from "./prompt-bar";
 import { RunReadout } from "./run-readout";
 import { StageRail } from "./stage-rail";
 import { pipelineStore, usePipeline } from "./use-pipeline";
 
-export function LivePipeline() {
+export interface LivePipelineProps {
+  /** True while the generated character is on stage (US-05; page owns the slot). */
+  playingGenerated: boolean;
+  /** Swap the succeeded run's character onto the stage. */
+  onPlayGenerated: () => void;
+  /** True while the play swap's GLBs are still streaming in. */
+  playPending: boolean;
+}
+
+export function LivePipeline({
+  playingGenerated,
+  onPlayGenerated,
+  playPending,
+}: LivePipelineProps) {
   const run = usePipeline((state) => state.run);
   const startOver = usePipeline((state) => state.startOver);
   const terminal = run?.status === "succeeded" || run?.status === "failed";
@@ -41,7 +55,17 @@ export function LivePipeline() {
 
       {run !== null && (
         <>
-          <RunReadout />
+          {/* On success the receipt line carries the numbers — no double readout. */}
+          {run.status === "succeeded" ? (
+            <CompletionActions
+              run={run}
+              playing={playingGenerated}
+              onPlay={onPlayGenerated}
+              playPending={playPending}
+            />
+          ) : (
+            <RunReadout />
+          )}
           <StageRail />
           {terminal && (
             <button

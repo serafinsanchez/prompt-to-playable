@@ -18,6 +18,7 @@ export function PromptBar() {
   const start = usePipeline((state) => state.start);
 
   const running = runStatus === "running";
+  const succeeded = runStatus === "succeeded";
   const canStart = apiKey !== "" && prompt.trim() !== "" && !running;
 
   const onSubmit = (event: FormEvent): void => {
@@ -50,17 +51,26 @@ export function PromptBar() {
           data-testid="pipeline-start"
           disabled={!canStart}
           aria-busy={running}
-          // Soft accent glow: DESIGN.md's one shadow exception, primary CTA only.
-          className="rounded-md bg-accent px-4 py-2 font-mono text-xs uppercase tracking-caps text-accent-foreground shadow-[0_0_20px_-6px_var(--color-accent)] transition-transform duration-(--duration-fast) ease-(--ease-stage) hover:bg-accent/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none motion-reduce:transition-none"
+          // Soft accent glow: DESIGN.md's one shadow exception, primary CTA
+          // only — after a success, "Play it" owns the glow and this steps
+          // down to the secondary treatment (accent discipline).
+          className={
+            succeeded
+              ? "rounded-md border border-border px-4 py-2 font-mono text-xs uppercase tracking-caps text-foreground transition-transform duration-(--duration-fast) ease-(--ease-stage) hover:border-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+              : "rounded-md bg-accent px-4 py-2 font-mono text-xs uppercase tracking-caps text-accent-foreground shadow-[0_0_20px_-6px_var(--color-accent)] transition-transform duration-(--duration-fast) ease-(--ease-stage) hover:bg-accent/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none motion-reduce:transition-none"
+          }
         >
           {running ? "Generating" : "Generate"}
         </button>
       </div>
 
-      {/* The one mono helper line — biped guidance, DESIGN.md voice. */}
-      <p className="font-mono text-xs text-muted">
-        Two legs rig best. 55 credits. About 4 minutes.
-      </p>
+      {/* The one mono helper line — biped guidance, DESIGN.md voice. Hidden
+          once a run succeeds: its forecast would rhyme against the receipt. */}
+      {!succeeded && (
+        <p className="font-mono text-xs text-muted">
+          Two legs rig best. 55 credits. About 4 minutes.
+        </p>
+      )}
     </form>
   );
 }
