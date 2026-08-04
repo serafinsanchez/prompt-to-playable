@@ -26,18 +26,17 @@ import { Logger, NodeIO, type Document } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, meshopt, prune, textureCompress } from "@gltf-transform/functions";
 import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
+import sharp from "sharp";
 
 import { ANIMATION_CLIPS, type AnimationClip } from "../../lib/meshy/types";
 
 /**
  * Max texture edge for gallery rigs; raw Meshy textures are 4096×4096 PNG
- * since the refine stage went 4k (2026-08-04). 1024 is a measured budget
- * decision, not a leftover: with no lossy encoder installed the pipeline
- * re-encodes PNG, and 2048 PNG made the spike rig 8.1 MB — double the 4 MB
- * gallery budget the integration test enforces. Raising this means first
- * adding a WebP encoder (sharp) to the pregen path — needs spec approval.
+ * since the refine stage went 4k (2026-08-04). 2048 cashes in that upgrade
+ * now that sharp encodes WebP — lossless PNG at 2048 was 8.1 MB, double the
+ * 4 MB gallery budget the integration test enforces.
  */
-export const GALLERY_TEXTURE_SIZE = 1024;
+export const GALLERY_TEXTURE_SIZE = 2048;
 
 /** Quiet logger — the pregen script reports sizes itself. */
 const SILENT = new Logger(Logger.Verbosity.ERROR);
@@ -95,9 +94,9 @@ export async function optimizeRigGlb(
   await document.transform(
     dedup(),
     prune(),
-    // No encoder installed → gltf-transform's built-in ndarray resize
-    // (Lanczos, re-encoded as PNG). Only shrinks — smaller textures pass through.
-    textureCompress({ resize: [textureSize, textureSize] }),
+    // sharp → WebP: the lossy step that lets 2048² fit the 4 MB budget.
+    // Resize only shrinks — smaller textures pass through.
+    textureCompress({ encoder: sharp, targetFormat: "webp", resize: [textureSize, textureSize] }),
     // Quantize + reorder + EXT_meshopt_compression on every buffer view.
     meshopt({ encoder: MeshoptEncoder }),
   );

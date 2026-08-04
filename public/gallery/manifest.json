@@ -2,7 +2,7 @@
   {
     "slug": "knight",
     "prompt": "low-poly knight in full plate armor, standing upright, arms at sides, facing forward",
-    "glbPath": "/gallery/knight/rig.8d812819.glb",
+    "glbPath": "/gallery/knight/rig.8432deee.glb",
     "clipPaths": {
       "idle": "/gallery/knight/idle.48b88150.glb",
       "walk": "/gallery/knight/walk.c0747f1e.glb",

@@ -157,6 +157,8 @@ describe.skipIf(!existsSync(join(spikeDir, "rig.glb")))("spike GLBs (integration
     expect(countTriangles(rig)).toBe(29_015);
     expect(rig.getRoot().listSkins()).toHaveLength(1);
     const [texture] = rig.getRoot().listTextures();
-    expect(texture.getSize()).toEqual([1024, 1024]);
+    expect(texture.getSize()).toEqual([2048, 2048]);
+    // WebP is what makes 2048 affordable — PNG at this size was 8.1 MB.
+    expect(texture.getMimeType()).toBe("image/webp");
   }, 60_000);
 });
