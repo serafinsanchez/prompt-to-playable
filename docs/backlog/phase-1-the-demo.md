@@ -15,7 +15,7 @@
 | 6 | `[x]` | ui | US-04: Per-stage API-call panel | [us-04-api-panel.md](../specs/us-04-api-panel.md) |
 | 7 | `[x]` | ui | US-05: Play the generated character + download GLB | [us-05-play-and-download.md](../specs/us-05-play-and-download.md) |
 | 8 | `[~]` | ui | US-06: Failure states + stage retry | [us-06-failure-states.md](../specs/us-06-failure-states.md) |
-| 9 | `[ ]` | backend | TASK-12: Collapse per-stage dispatch into a stage-descriptor table | [task-12-stage-descriptor-table.md](../specs/task-12-stage-descriptor-table.md) |
+| 9 | `[~]` | backend | TASK-12: Collapse per-stage dispatch into a stage-descriptor table | [task-12-stage-descriptor-table.md](../specs/task-12-stage-descriptor-table.md) |
 
 **Dependency notes:** #9 has no deps but is NOT parallel-safe with #8 (both touch `lib/meshy/pipeline.ts`; #8 has in-flight work on the main checkout) — #9 runs on an isolated worktree branch from main HEAD, and whichever lands second resolves the mechanical conflict. #1 and #2.1 have no deps — start either first (parallel-safe: disjoint FILES TOUCHED). #2.2 ← #2.1. #3.1 ← #1. #3.2 ← #3.1 + external credit gate. #4 ← #2.1 + #3.1 (8+ count arrives with #3.2, no UI change). #5.1 ← #1. #5.2 ← #5.1. #6 ← #5.2. #7 ← #2.2 + #5.1. #8 ← #5.2 (also touches `lib/meshy/` — not parallel-safe with anything else in `lib/meshy/`).
 
