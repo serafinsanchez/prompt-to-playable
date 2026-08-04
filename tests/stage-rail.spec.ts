@@ -283,3 +283,61 @@ test("enlarge: no affordance on stages without a mesh artifact", async ({ page }
   await expect(page.getByTestId("enlarge-rig")).toHaveCount(0);
   await expect(page.getByTestId("enlarge-refine")).toHaveCount(0);
 });
+
+test("enlarge: steps across landed mesh stages and stops at the ends", async ({ page }) => {
+  await seedRun(
+    page,
+    makeRun("running", {
+      preview: succeededStage("preview-0001", 20, 0),
+      refine: succeededStage("refine-0002", 10, 90_000),
+      remesh: succeededStage("remesh-0003", 5, 180_000),
+    }),
+  );
+  await page.goto("/");
+
+  await page.getByTestId("enlarge-refine").click();
+  const caption = page.getByTestId("lightbox-caption");
+  await expect(caption).toHaveText("refine · 10c · 1:22");
+
+  // Opening mid-list means both directions are live.
+  await expect(page.getByTestId("lightbox-prev")).toBeEnabled();
+  await expect(page.getByTestId("lightbox-next")).toBeEnabled();
+
+  await page.getByTestId("lightbox-next").click();
+  await expect(caption).toHaveText("remesh · 5c · 1:22");
+  await expect(page.getByTestId("lightbox-next")).toBeDisabled();
+
+  // Keyboard mirrors the arrows.
+  await page.keyboard.press("ArrowLeft");
+  await expect(caption).toHaveText("refine · 10c · 1:22");
+  await page.keyboard.press("ArrowLeft");
+  await expect(caption).toHaveText("preview · 20c · 1:22");
+  await expect(page.getByTestId("lightbox-prev")).toBeDisabled();
+
+  // At the start, ArrowLeft is inert rather than wrapping.
+  await page.keyboard.press("ArrowLeft");
+  await expect(caption).toHaveText("preview · 20c · 1:22");
+
+  // One dot per landed artifact, current one marked.
+  const dots = page.getByTestId("lightbox-dots").locator("[data-dot]");
+  await expect(dots).toHaveCount(3);
+  await expect(dots.nth(0)).toHaveAttribute("data-dot", "current");
+  await expect(dots.nth(1)).toHaveAttribute("data-dot", "other");
+
+  // Focus trap: Tab from the last enabled control wraps to the first rather
+  // than escaping to the rail behind the scrim. At index 0 the prev arrow is
+  // disabled, so the cycle is next → close → next.
+  await page.getByTestId("lightbox-close").focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("lightbox-next")).toBeFocused();
+});
+
+test("enlarge: a lone artifact has no live arrows", async ({ page }) => {
+  await seedRun(page, makeRun("running", { preview: succeededStage("preview-0001", 20, 0) }));
+  await page.goto("/");
+
+  await page.getByTestId("enlarge-preview").click();
+  await expect(page.getByTestId("lightbox-prev")).toBeDisabled();
+  await expect(page.getByTestId("lightbox-next")).toBeDisabled();
+  await expect(page.getByTestId("lightbox-dots").locator("[data-dot]")).toHaveCount(1);
+});

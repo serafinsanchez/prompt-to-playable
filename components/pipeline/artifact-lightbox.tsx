@@ -75,6 +75,17 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
     };
   }, [snapshotSource]);
 
+  const atStart = index === 0;
+  const atEnd = index === artifacts.length - 1;
+  const step = (delta: number): void => {
+    setIndex((current) => Math.min(Math.max(current + delta, 0), artifacts.length - 1));
+  };
+
+  // Captured once per render so the focus-trap effect's dependency below is a
+  // number, not the `artifacts` array identity — see the file header for why
+  // that effect can't take per-render values directly.
+  const total = artifacts.length;
+
   useEffect(() => {
     const node = dialogRef.current;
     if (node === null) return;
@@ -85,6 +96,11 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         onCloseRef.current();
+        return;
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        const delta = event.key === "ArrowRight" ? 1 : -1;
+        setIndex((current) => Math.min(Math.max(current + delta, 0), total - 1));
         return;
       }
       if (event.key !== "Tab" || node === null) return;
@@ -106,8 +122,10 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
       document.removeEventListener("keydown", onKeyDown);
       opener?.focus();
     };
-    // Mount/unmount only — see file header and the onCloseRef comment above.
-  }, []);
+    // Mount/unmount plus artifact-count changes only — see file header and
+    // the onCloseRef comment above. `total` is a number, stable across
+    // re-renders where the `artifacts` array identity is not.
+  }, [total]);
 
   // Every hook above runs unconditionally — React requires stable hook order,
   // so this guard cannot move up.
@@ -133,25 +151,73 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
         }}
         className="flex w-full max-w-[min(80vw,640px)] flex-col gap-3 transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
       >
-        {/* The box is reserved up front and pulses while the snapshot renders,
-            so the caption never jumps under the pointer. */}
-        <span
-          className={`relative block aspect-square w-full overflow-hidden rounded-md border border-border bg-elevated ${
-            shown === null ? "animate-pulse motion-reduce:animate-none" : ""
-          }`}
-        >
-          {shown !== null && (
-            /* eslint-disable-next-line @next/next/no-img-element -- signed Meshy PNG or an inline data URL; next/image optimizes neither */
-            <img
-              key={artifact.stage}
-              data-testid="lightbox-image"
-              src={shown}
-              alt={`${artifact.label} stage mesh, enlarged`}
-              draggable={false}
-              className="size-full object-contain transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
-            />
-          )}
-        </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            data-testid="lightbox-prev"
+            aria-label="Previous stage"
+            disabled={atStart}
+            onClick={() => {
+              step(-1);
+            }}
+            className="shrink-0 rounded-sm border border-border p-2 text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+          >
+            <svg
+              viewBox="0 0 8 8"
+              aria-hidden
+              className="size-3 rotate-180 stroke-current"
+              fill="none"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 1.5L5.5 4 3 6.5" />
+            </svg>
+          </button>
+
+          {/* The box is reserved up front and pulses while the snapshot
+              renders, so the caption never jumps under the pointer. */}
+          <span
+            className={`relative block aspect-square min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-elevated ${
+              shown === null ? "animate-pulse motion-reduce:animate-none" : ""
+            }`}
+          >
+            {shown !== null && (
+              /* eslint-disable-next-line @next/next/no-img-element -- signed Meshy PNG or an inline data URL; next/image optimizes neither */
+              <img
+                key={artifact.stage}
+                data-testid="lightbox-image"
+                src={shown}
+                alt={`${artifact.label} stage mesh, enlarged`}
+                draggable={false}
+                className="size-full object-contain transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
+              />
+            )}
+          </span>
+
+          <button
+            type="button"
+            data-testid="lightbox-next"
+            aria-label="Next stage"
+            disabled={atEnd}
+            onClick={() => {
+              step(1);
+            }}
+            className="shrink-0 rounded-sm border border-border p-2 text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+          >
+            <svg
+              viewBox="0 0 8 8"
+              aria-hidden
+              className="size-3 stroke-current"
+              fill="none"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 1.5L5.5 4 3 6.5" />
+            </svg>
+          </button>
+        </div>
 
         <div className="flex items-center justify-between gap-3">
           <span
@@ -170,6 +236,23 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
             esc
           </button>
         </div>
+
+        {/* The progression, not a carousel: one dot per landed mesh stage. */}
+        <ol
+          data-testid="lightbox-dots"
+          aria-hidden
+          className="flex items-center justify-center gap-2"
+        >
+          {artifacts.map((entry, position) => (
+            <li
+              key={entry.stage}
+              data-dot={position === index ? "current" : "other"}
+              className={`size-1 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-stage) motion-reduce:transition-none ${
+                position === index ? "bg-accent" : "bg-border"
+              }`}
+            />
+          ))}
+        </ol>
       </div>
     </div>,
     document.body,
