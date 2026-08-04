@@ -19,3 +19,6 @@ coverage/
 .env*
 spike-output/
 public/spike/
+
+# pregen scratch (task-id resume state — never commit)
+.pregen/
