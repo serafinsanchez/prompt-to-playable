@@ -1,9 +1,11 @@
 "use client";
 
 import { ContactShadows, KeyboardControls, useProgress } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { Suspense, useEffect, useState } from "react";
+import { PMREMGenerator } from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { CharacterBoundary } from "./character-boundary";
 import type { CharacterSource } from "./clip-binding";
 import { SCENE_COLOR } from "./colors";
@@ -13,24 +15,60 @@ import { CONTROL_MAP } from "./controls";
 const CAMERA_POSITION: [number, number, number] = [0, 1.5, 3.4];
 const LOOK_AT: [number, number, number] = [0, 0.9, 0];
 
+/**
+ * Kept low so IBL fills metal without lifting the dark-stage mood — the
+ * chartreuse rim stays the one accent (DESIGN.md). RoomEnvironment is a
+ * bright studio; at full strength it reads as daylight on a night stage.
+ */
+const ENVIRONMENT_INTENSITY = 0.25;
+
+/**
+ * Image-based lighting from three's built-in RoomEnvironment (zero assets,
+ * no network). Meshy rigs lose their metallic-roughness map, so their metal
+ * needs *something* to reflect — without this, delit basecolors render as
+ * flat white (see docs/verification/2026-08-04-param-ab-report.md).
+ * Lighting only: the background/fog stay untouched.
+ */
+function StageEnvironment() {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+
+  useEffect(() => {
+    const pmrem = new PMREMGenerator(gl);
+    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = environment;
+    scene.environmentIntensity = ENVIRONMENT_INTENSITY;
+    return () => {
+      scene.environment = null;
+      environment.dispose();
+      pmrem.dispose();
+    };
+  }, [gl, scene]);
+
+  return null;
+}
+
 /** Ground disc + fog + layered lights. Atmosphere, not props (DESIGN.md). */
 function Stage() {
   return (
     <>
       <color attach="background" args={[SCENE_COLOR.background]} />
       <fog attach="fog" args={[SCENE_COLOR.background, 5.5, 12]} />
+      <StageEnvironment />
 
-      <hemisphereLight args={[SCENE_COLOR.foreground, SCENE_COLOR.background, 0.45]} />
+      {/* Levels sized for albedo up to 1.0: delit meshy-6 basecolors are near-white,
+          and the old hotter rig (spot 750 / key 0.9) clipped them to pure white. */}
+      <hemisphereLight args={[SCENE_COLOR.foreground, SCENE_COLOR.background, 0.3]} />
       {/* Warm key from camera-left; the follow cam rests at −Z (US-01b), so the key sits there too. */}
-      <directionalLight position={[2.5, 4, -2.5]} intensity={0.9} color={SCENE_COLOR.foreground} />
+      <directionalLight position={[2.5, 4, -2.5]} intensity={0.5} color={SCENE_COLOR.foreground} />
       {/* Chartreuse rim from beyond the knight, low and grazing — silhouettes him against the dark; the one accent. */}
-      <directionalLight position={[-3, 1.6, 2.2]} intensity={3.2} color={SCENE_COLOR.accent} />
+      <directionalLight position={[-3, 1.6, 2.2]} intensity={2.2} color={SCENE_COLOR.accent} />
       {/* Overhead pool of light: anchors the knight to the floor, stage-style. */}
       <spotLight
         position={[0, 5.5, 0.8]}
         angle={0.34}
         penumbra={1}
-        intensity={750}
+        intensity={300}
         color={SCENE_COLOR.foreground}
         target-position={[0, 0, 0]}
       />

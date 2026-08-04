@@ -29,7 +29,14 @@ import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
 
 import { ANIMATION_CLIPS, type AnimationClip } from "../../lib/meshy/types";
 
-/** Max texture edge for gallery rigs; raw Meshy textures are 4096×4096 PNG. */
+/**
+ * Max texture edge for gallery rigs; raw Meshy textures are 4096×4096 PNG
+ * since the refine stage went 4k (2026-08-04). 1024 is a measured budget
+ * decision, not a leftover: with no lossy encoder installed the pipeline
+ * re-encodes PNG, and 2048 PNG made the spike rig 8.1 MB — double the 4 MB
+ * gallery budget the integration test enforces. Raising this means first
+ * adding a WebP encoder (sharp) to the pregen path — needs spec approval.
+ */
 export const GALLERY_TEXTURE_SIZE = 1024;
 
 /** Quiet logger — the pregen script reports sizes itself. */

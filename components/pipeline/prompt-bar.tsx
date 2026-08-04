@@ -113,7 +113,7 @@ export function PromptBar() {
           once a run succeeds: its forecast would rhyme against the receipt. */}
       {!succeeded && (
         <p className="font-mono text-xs text-muted">
-          Two legs rig best. 55 credits. About 4 minutes.
+          Two legs rig best. 55 credits. About 10 minutes.
         </p>
       )}
     </form>

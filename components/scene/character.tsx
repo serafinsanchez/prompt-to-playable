@@ -12,6 +12,7 @@ import {
   type ClipName,
 } from "./clip-binding";
 import { normalizeClipFacing } from "./clip-facing";
+import { normalizeMeshyMaterials } from "./meshy-material";
 
 /**
  * Load a character's rig + clip GLBs and bind them through one mixer
@@ -36,6 +37,8 @@ export function useBoundCharacter(source: CharacterSource): {
     ) as Record<ClipName, THREE.AnimationClip | null>;
     // Meshy clips don't share a root orientation — align them all to idle's.
     normalizeClipFacing(rig.scene, clips);
+    // Meshy rigs glow their own basecolor and default to full metal — undo both.
+    normalizeMeshyMaterials(rig.scene);
     return bindCharacterClips(rig.scene, clips);
   }, [rig.scene, clipGltfs]);
 
