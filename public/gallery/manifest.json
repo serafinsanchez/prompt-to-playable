@@ -24,5 +24,187 @@
       "animate:emote": 3
     },
     "polyCount": 29015
+  },
+  {
+    "slug": "robot-butler",
+    "prompt": "brass steampunk robot butler with articulated arms, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/robot-butler/rig.8e53a8be.glb",
+    "clipPaths": {
+      "idle": "/gallery/robot-butler/idle.6809583a.glb",
+      "walk": "/gallery/robot-butler/walk.cd1b4b93.glb",
+      "run": "/gallery/robot-butler/run.692b94c3.glb",
+      "jump": "/gallery/robot-butler/jump.dc0e30bd.glb",
+      "emote": "/gallery/robot-butler/emote.ad70f52b.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 405,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 30908
+  },
+  {
+    "slug": "goblin-scout",
+    "prompt": "forest goblin scout in fitted leather armor and trousers, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/goblin-scout/rig.dbdf23df.glb",
+    "clipPaths": {
+      "idle": "/gallery/goblin-scout/idle.ac8005c8.glb",
+      "walk": "/gallery/goblin-scout/walk.60033e63.glb",
+      "run": "/gallery/goblin-scout/run.d48f78c2.glb",
+      "jump": "/gallery/goblin-scout/jump.618f4e1a.glb",
+      "emote": "/gallery/goblin-scout/emote.1b9c887c.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 434,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 30950
+  },
+  {
+    "slug": "astronaut",
+    "prompt": "astronaut explorer in an orange spacesuit with backpack, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/astronaut/rig.be4c7758.glb",
+    "clipPaths": {
+      "idle": "/gallery/astronaut/idle.7dfe0b9c.glb",
+      "walk": "/gallery/astronaut/walk.87d50664.glb",
+      "run": "/gallery/astronaut/run.800961ce.glb",
+      "jump": "/gallery/astronaut/jump.a8744f65.glb",
+      "emote": "/gallery/astronaut/emote.f8589b7f.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 443,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 31005
+  },
+  {
+    "slug": "shield-maiden",
+    "prompt": "viking shield-maiden in chainmail shirt and trousers, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/shield-maiden/rig.bb32a5f2.glb",
+    "clipPaths": {
+      "idle": "/gallery/shield-maiden/idle.a501726a.glb",
+      "walk": "/gallery/shield-maiden/walk.12038b21.glb",
+      "run": "/gallery/shield-maiden/run.044a1fa7.glb",
+      "jump": "/gallery/shield-maiden/jump.1f2cf838.glb",
+      "emote": "/gallery/shield-maiden/emote.78d57efe.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 598,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 30893
+  },
+  {
+    "slug": "street-samurai",
+    "prompt": "cyberpunk street samurai in a fitted neon jacket and cargo pants, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/street-samurai/rig.9c69d02f.glb",
+    "clipPaths": {
+      "idle": "/gallery/street-samurai/idle.33b108f5.glb",
+      "walk": "/gallery/street-samurai/walk.2c38ddcb.glb",
+      "run": "/gallery/street-samurai/run.c7c8bb85.glb",
+      "jump": "/gallery/street-samurai/jump.90ac2780.glb",
+      "emote": "/gallery/street-samurai/emote.c9b87462.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 423,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 31180
+  },
+  {
+    "slug": "clockwork-puppet",
+    "prompt": "wooden clockwork puppet adventurer with jointed limbs, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/clockwork-puppet/rig.446dab3b.glb",
+    "clipPaths": {
+      "idle": "/gallery/clockwork-puppet/idle.f34e85cd.glb",
+      "walk": "/gallery/clockwork-puppet/walk.02755745.glb",
+      "run": "/gallery/clockwork-puppet/run.a4813cf8.glb",
+      "jump": "/gallery/clockwork-puppet/jump.29b651d7.glb",
+      "emote": "/gallery/clockwork-puppet/emote.d31f818e.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 423,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 30824
+  },
+  {
+    "slug": "desert-ranger",
+    "prompt": "desert ranger in a fitted tunic and trousers with goggles, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/desert-ranger/rig.e5babcd1.glb",
+    "clipPaths": {
+      "idle": "/gallery/desert-ranger/idle.b62b9621.glb",
+      "walk": "/gallery/desert-ranger/walk.197e19f4.glb",
+      "run": "/gallery/desert-ranger/run.639a9e60.glb",
+      "jump": "/gallery/desert-ranger/jump.92111e27.glb",
+      "emote": "/gallery/desert-ranger/emote.cd08211c.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 353,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 31164
   }
 ]

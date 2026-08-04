@@ -37,7 +37,7 @@ import {
 } from "./manifest";
 import { seedKnightFromSpike } from "./offline";
 import { createGalleryIO, formatBytes, optimizeCharacter } from "./optimize";
-import { GALLERY_PROMPTS } from "./prompts";
+import { GALLERY_PROMPTS, type GalleryPrompt } from "./prompts";
 import { generateCharacter, type RunnerDeps } from "./runner";
 
 const TEST_MODE_KEY = "msy_dummy_api_key_for_test_mode_12345678";
@@ -99,9 +99,18 @@ async function main(): Promise<void> {
   const queue = GALLERY_PROMPTS.filter((prompt) => !done.has(prompt.slug));
   console.log(`${String(queue.length)} of ${String(GALLERY_PROMPTS.length)} prompts to generate (${String(done.size)} already in manifest)`);
 
+  const dropped: string[] = [];
   for (const spec of queue) {
     console.log(`\n=== ${spec.slug}: "${spec.prompt}"`);
-    const raw = await generateCharacter(spec, deps);
+    // Spike failure pattern (TASK-06b req 4): failed tasks auto-refund and the
+    // snapshot keeps paid task ids, so attempt 2 resumes instead of re-spending.
+    // After 2 failed attempts the character is dropped and logged, not fought —
+    // and the rest of the queue still runs.
+    const raw = await attemptCharacter(spec, deps);
+    if (raw === null) {
+      dropped.push(spec.slug);
+      continue;
+    }
 
     const optimized = await optimizeCharacter(io, raw);
     for (const [name, { bytesIn, bytesOut }] of Object.entries(optimized.stats)) {
@@ -129,6 +138,27 @@ async function main(): Promise<void> {
   const balanceAfter = await client.getBalance().catch(() => null);
   console.log(`\nbalance after: ${balanceAfter ?? "unknown"}`);
   console.log(`gallery: ${String(manifest.length)} entries in ${GALLERY_DIR}`);
+  if (dropped.length > 0) {
+    console.log(`dropped after 2 failed attempts: ${dropped.join(", ")}`);
+    process.exitCode = 1;
+  }
+}
+
+/** Run one character with a single resume-retry; null = dropped after 2 failed attempts. */
+async function attemptCharacter(
+  spec: GalleryPrompt,
+  deps: RunnerDeps,
+): Promise<Awaited<ReturnType<typeof generateCharacter>> | null> {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await generateCharacter(spec, deps);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[${spec.slug}] attempt ${String(attempt)}/2 failed: ${message}`);
+      if (attempt === 2) console.error(`[${spec.slug}] dropped (failed tasks auto-refund)`);
+    }
+  }
+  return null;
 }
 
 function stateFile(slug: string): string {
