@@ -34,13 +34,14 @@ function diskPath(urlPath: string): string {
 const FLOAT = 5126; // Accessor componentType for float32
 
 /**
- * Meshy's animate clips carry ROTATION sampler outputs as normalized SHORT
- * (quaternion channels only — TRANSLATION/SCALE ship as float32 already).
- * `dequantize()` from @gltf-transform/functions only walks mesh primitive
- * attributes, never animation samplers, so it leaves these untouched — and
- * `bakeClipFacing` (lib/glb/facing-bake.ts) requires float32 rotation data
- * and throws otherwise. Decode any non-float sampler accessor the same way
- * dequantize() decodes a quantized vertex attribute: divide by the
+ * Gallery clips' ROTATION sampler outputs carry normalized SHORT quantization
+ * (quaternion channels only — TRANSLATION/SCALE ship as float32 already),
+ * introduced by our pregen meshopt() pass in optimize.ts; raw Meshy outputs
+ * are float32. `dequantize()` from @gltf-transform/functions only walks mesh
+ * primitive attributes, never animation samplers, so it leaves these untouched
+ * — and `bakeClipFacing` (lib/glb/facing-bake.ts) requires float32 rotation
+ * data and throws otherwise. Decode any non-float sampler accessor the same
+ * way dequantize() decodes a quantized vertex attribute: divide by the
  * componentType's normalized-int range.
  */
 function dequantizeAnimationAccessors(document: Document): void {
