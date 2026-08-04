@@ -45,6 +45,10 @@ export interface GalleryEntry {
   stageCredits: Record<StageId, number>;
   /** Triangle count of the optimized rig mesh. */
   polyCount: number;
+  /** URL path of the merged single-file game-ready GLB (US-10). Absent until `npm run pregen:gameready` runs. */
+  gameReadyPath?: string;
+  /** Byte size of the game-ready GLB, for honest size copy in the UI. */
+  gameReadySizeBytes?: number;
 }
 
 /** The manifest is a plain array — the gallery renders every entry. */
@@ -77,6 +81,13 @@ export function galleryEntryErrors(value: unknown): string[] {
 
   errors.push(...recordErrors(entry.clipPaths, "clipPaths", ANIMATION_CLIPS, isNonEmptyString));
   errors.push(...recordErrors(entry.stageCredits, "stageCredits", PIPELINE_STAGES, isNonNegativeNumber));
+
+  if (entry.gameReadyPath !== undefined && !isNonEmptyString(entry.gameReadyPath)) {
+    errors.push("gameReadyPath must be a non-empty string when present");
+  }
+  if (entry.gameReadySizeBytes !== undefined && !isNonNegativeNumber(entry.gameReadySizeBytes)) {
+    errors.push("gameReadySizeBytes must be a non-negative number when present");
+  }
 
   // Receipt invariant: the headline number is the sum of its breakdown.
   if (errors.length === 0) {

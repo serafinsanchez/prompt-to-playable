@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:a11y": "playwright test tests/a11y.spec.ts",
     "check:tokens": "bash scripts/check-tokens.sh",
-    "pregen": "tsx scripts/pregen/index.ts"
+    "pregen": "tsx scripts/pregen/index.ts",
+    "pregen:gameready": "tsx scripts/pregen/gameready.ts"
   },
   "dependencies": {
     "@gltf-transform/core": "^4.4.2",

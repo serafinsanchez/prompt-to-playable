@@ -44,6 +44,20 @@ export function parseGalleryManifest(payload: unknown): GalleryManifest {
     if (typeof entry.stageCredits !== "object" || entry.stageCredits === null) {
       throw new Error(`Gallery manifest ${label}: missing stageCredits.`);
     }
+    if (
+      entry.gameReadyPath !== undefined &&
+      (typeof entry.gameReadyPath !== "string" || entry.gameReadyPath.length === 0)
+    ) {
+      throw new Error(`Gallery manifest ${label}: invalid gameReadyPath.`);
+    }
+    if (
+      entry.gameReadySizeBytes !== undefined &&
+      (typeof entry.gameReadySizeBytes !== "number" ||
+        !Number.isFinite(entry.gameReadySizeBytes) ||
+        entry.gameReadySizeBytes < 0)
+    ) {
+      throw new Error(`Gallery manifest ${label}: invalid gameReadySizeBytes.`);
+    }
     return entry as GalleryEntry;
   });
 }
