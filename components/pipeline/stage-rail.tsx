@@ -55,7 +55,9 @@ function StageRow({
   compact?: boolean;
   /** US-06: run-level backpressure (backoff / queue-full) lands on the active row only. */
   override?: RowPresentation | undefined;
-  /** US-08: open the lightbox on this stage's artifact. Absent when it has none. */
+  /** US-08: opens the lightbox on this stage's artifact via `onEnlarge(stage)`.
+      Passed to every row — rig and all five animate:* clips included — the
+      enlarge button itself only renders where `hasArtifact` is true below. */
   onEnlarge?: ((stage: StageId) => void) | undefined;
 }) {
   const { kind, meta } = override ?? rowPresentation(state);
@@ -152,7 +154,7 @@ function StageRow({
             // right-5 = the caret (size-2 = 8px) plus the gap-3 (12px) that
             // precedes it, so this lands exactly on the 32px thumbnail slot.
             // tests/stage-rail.spec.ts asserts the overlap geometrically.
-            className="absolute right-5 size-8 cursor-zoom-in rounded-sm border border-transparent transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent motion-reduce:transition-none"
+            className="absolute right-5 size-8 cursor-zoom-in rounded-sm border border-transparent transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-95 active:border-accent motion-reduce:transition-none motion-reduce:active:scale-100"
           />
         )}
       </div>
@@ -166,6 +168,9 @@ function StageRow({
 
 export function StageRail() {
   const run = usePipeline((state) => state.run);
+  // `openIndex` indexes into `artifacts` below; safe only because artifacts
+  // append in pipeline order and never shrink while a run is live, so an
+  // open index can never outrun the array it was captured against.
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   if (run === null) return null;
   // US-06: at most one row carries the run-level 429 overlay.

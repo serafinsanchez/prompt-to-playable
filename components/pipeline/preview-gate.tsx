@@ -71,7 +71,7 @@ export function PreviewGate() {
           onClick={() => {
             setEnlarged(true);
           }}
-          className={`block aspect-square w-full cursor-zoom-in overflow-hidden rounded-sm border border-border bg-background transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent motion-reduce:transition-none ${
+          className={`block aspect-square w-full cursor-zoom-in overflow-hidden rounded-sm border border-border bg-background transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-95 active:border-accent motion-reduce:transition-none motion-reduce:active:scale-100 ${
             thumbState === "loading" ? "animate-pulse motion-reduce:animate-none" : ""
           }`}
         >

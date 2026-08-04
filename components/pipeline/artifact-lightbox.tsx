@@ -37,6 +37,11 @@ import { createPortal } from "react-dom";
 import type { MeshArtifact } from "./artifacts";
 import { snapshotGlb } from "./artifact-thumbnail";
 
+/** Shared by `step()` and the arrow-key handler so the two clamps can't drift. */
+function clampIndex(value: number, length: number): number {
+  return Math.min(Math.max(value, 0), length - 1);
+}
+
 export interface ArtifactLightboxProps {
   /** Every landed mesh artifact, in pipeline order. */
   artifacts: MeshArtifact[];
@@ -47,7 +52,12 @@ export interface ArtifactLightboxProps {
 
 export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactLightboxProps) {
   const [index, setIndex] = useState(initialIndex);
-  const [fallback, setFallback] = useState<string | null>(null);
+  // Whether the *primary* `artifact.imageUrl` has errored (signed Meshy PNGs
+  // die in ~3 days; a resumed run's stale URL 404s). Tri-state fallback below
+  // mirrors artifact-thumbnail.tsx's `snapshot` state so a failed GLB render
+  // has a settled state instead of pulsing forever.
+  const [imageFailed, setImageFailed] = useState(false);
+  const [fallback, setFallback] = useState<string | "failed" | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const artifact = artifacts[index];
@@ -61,12 +71,30 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
     onCloseRef.current = onClose;
   });
 
-  // No pre-rendered PNG (legacy run, or a task Meshy never rendered): take a
-  // one-shot 512px snapshot through the shared offscreen renderer — the same
-  // path and the same serialized queue the rail uses. Null whenever a real
-  // PNG exists or the index is out of range, which is also the effect's guard.
-  const snapshotSource =
-    artifact !== undefined && artifact.imageUrl === null ? artifact.modelUrl : null;
+  // Reset the image state when the artifact itself changes — a render-time
+  // adjustment, not an effect setState (react-hooks/set-state-in-effect).
+  // Without this, stepping to a new artifact kept the previous artifact's
+  // rendered `fallback` snapshot around: `shown` below would show it under
+  // the new caption for however long the new GLB takes to download and
+  // render. NUL-separated so a URL containing a space can't collide the way
+  // "a b"+"c" vs "a"+"b c" could (mirrors artifact-thumbnail.tsx's reset).
+  const source = `${artifact?.imageUrl ?? ""}\0${artifact?.modelUrl ?? ""}`;
+  const [prevSource, setPrevSource] = useState(source);
+  if (prevSource !== source) {
+    setPrevSource(source);
+    setImageFailed(false);
+    setFallback(null);
+  }
+
+  // Meshy's pre-rendered PNG, unless it errored — onError below routes here.
+  const image = imageFailed ? null : (artifact?.imageUrl ?? null);
+
+  // No pre-rendered PNG (legacy run, a task Meshy never rendered, or a dead
+  // signed URL): take a one-shot 512px snapshot through the shared offscreen
+  // renderer — the same path and the same serialized queue the rail uses.
+  // Null whenever a real image is showing or the index is out of range,
+  // which is also the effect's guard.
+  const snapshotSource = artifact !== undefined && image === null ? artifact.modelUrl : null;
 
   useEffect(() => {
     if (snapshotSource === null) return;
@@ -76,7 +104,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
         if (!cancelled) setFallback(dataUrl);
       })
       .catch(() => {
-        if (!cancelled) setFallback(null);
+        if (!cancelled) setFallback("failed");
       });
     return () => {
       cancelled = true;
@@ -86,7 +114,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
   const atStart = index === 0;
   const atEnd = index === artifacts.length - 1;
   const step = (delta: number): void => {
-    setIndex((current) => Math.min(Math.max(current + delta, 0), artifacts.length - 1));
+    setIndex((current) => clampIndex(current + delta, artifacts.length));
   };
 
   // Always the latest artifact count, read by the mount-only effect below —
@@ -101,6 +129,12 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
   useEffect(() => {
     const node = dialogRef.current;
     if (node === null) return;
+
+    // The dialog covers the viewport; the rail behind it must not scroll
+    // with it (mouse wheel, arrow keys landing on an ancestor).
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     // Restore focus to whatever opened us — the thumbnail's enlarge button.
     const opener = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
@@ -111,8 +145,9 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
         return;
       }
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
         const delta = event.key === "ArrowRight" ? 1 : -1;
-        setIndex((current) => Math.min(Math.max(current + delta, 0), totalRef.current - 1));
+        setIndex((current) => clampIndex(current + delta, totalRef.current));
         return;
       }
       if (event.key !== "Tab" || node === null) return;
@@ -132,6 +167,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
       opener?.focus();
     };
     // Mount/unmount only — see file header and the onCloseRef comment above.
@@ -141,13 +177,17 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
   // so this guard cannot move up.
   if (artifact === undefined) return null;
   const caption = `${artifact.label} · ${artifact.meta}`;
-  const shown = artifact.imageUrl ?? fallback;
+  const shown = image ?? (fallback !== null && fallback !== "failed" ? fallback : null);
+  // Settled failure: the primary image errored (or never existed) AND the
+  // GLB snapshot rejected. Distinct from `shown === null` mid-flight, which
+  // is still loading and should keep pulsing.
+  const settledFailed = image === null && fallback === "failed";
 
   return createPortal(
     <div
       data-testid="lightbox-scrim"
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none sm:p-6"
     >
       <div
         ref={dialogRef}
@@ -159,9 +199,9 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className="flex w-full max-w-[min(80vw,640px)] flex-col gap-3 rounded-md border border-border bg-elevated p-3 transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
+        className="flex w-full max-w-[min(92vw,640px)] flex-col gap-3 rounded-md border border-border bg-elevated p-3 transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
       >
-        <div className="flex items-center gap-3">
+        <div className="relative flex items-center">
           <button
             type="button"
             data-testid="lightbox-prev"
@@ -170,7 +210,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
             onClick={() => {
               step(-1);
             }}
-            className="shrink-0 rounded-sm border border-border p-2 text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+            className="absolute left-2 z-10 shrink-0 rounded-sm border border-border bg-elevated/90 p-2 text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100"
           >
             <svg
               viewBox="0 0 8 8"
@@ -186,10 +226,13 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
           </button>
 
           {/* The box is reserved up front and pulses while the snapshot
-              renders, so the caption never jumps under the pointer. */}
+              renders, so the caption never jumps under the pointer. Settles
+              to the iconographic cube on a dead URL + a failed GLB render,
+              rather than pulsing forever. */}
           <span
-            className={`relative block aspect-square min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-elevated ${
-              shown === null ? "animate-pulse motion-reduce:animate-none" : ""
+            data-testid="lightbox-frame"
+            className={`relative flex min-w-0 flex-1 items-center justify-center aspect-square overflow-hidden rounded-md border border-border bg-elevated ${
+              shown === null && !settledFailed ? "animate-pulse motion-reduce:animate-none" : ""
             }`}
           >
             {shown !== null && (
@@ -200,8 +243,26 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
                 src={shown}
                 alt={`${artifact.label} stage mesh, enlarged`}
                 draggable={false}
+                // Only the primary image can 404 out from under us (signed
+                // URLs die in ~3 days) — the fallback snapshot is an
+                // already-rendered data URL with its own failure path below.
+                onError={image !== null ? () => setImageFailed(true) : undefined}
                 className="size-full object-contain transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
               />
+            )}
+            {settledFailed && (
+              <svg
+                data-testid="lightbox-artifact-error"
+                viewBox="0 0 16 16"
+                aria-hidden
+                className="size-12 stroke-muted"
+                fill="none"
+                strokeWidth="1"
+                strokeLinejoin="round"
+              >
+                <path d="M8 1.5l5.5 3v7l-5.5 3-5.5-3v-7z" />
+                <path d="M8 1.5v7M2.5 4.5L8 8.5l5.5-4" />
+              </svg>
             )}
           </span>
 
@@ -213,7 +274,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
             onClick={() => {
               step(1);
             }}
-            className="shrink-0 rounded-sm border border-border p-2 text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+            className="absolute right-2 z-10 shrink-0 rounded-sm border border-border bg-elevated/90 p-2 text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100"
           >
             <svg
               viewBox="0 0 8 8"
@@ -230,8 +291,13 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
         </div>
 
         <div className="flex items-center justify-between gap-3">
+          {/* Screen readers generally don't re-announce a dialog's name on
+              step (see the aria-label above), so this is the only channel
+              that tells a screen-reader user which stage they just moved
+              to. */}
           <span
             data-testid="lightbox-caption"
+            aria-live="polite"
             className="font-mono text-xs uppercase tracking-caps text-muted"
           >
             {caption}
@@ -240,8 +306,9 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
             ref={closeRef}
             type="button"
             data-testid="lightbox-close"
+            aria-label="Close"
             onClick={onClose}
-            className="rounded-sm border border-border px-2 py-1 font-mono text-xs uppercase tracking-caps text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent motion-reduce:transition-none"
+            className="rounded-sm border border-border px-2 py-1 font-mono text-xs uppercase tracking-caps text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100"
           >
             esc
           </button>

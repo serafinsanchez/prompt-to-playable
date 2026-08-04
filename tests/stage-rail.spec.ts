@@ -85,13 +85,30 @@ async function seedRun(page: Page, run: ReturnType<typeof makeRun>): Promise<voi
 const FIXTURE_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGO48kIbK2IYWhIAvMl5wfWTQdgAAAAASUVORK5CYII=";
 
-const succeededStage = (id: string, credits: number, offset: number): Partial<FixtureStage> => ({
+// Three DISTINCT 8×8 solid PNGs (red/green/blue), one per mesh stage. An
+// implementation that always rendered artifacts[0] would still pass every
+// test that only asserts toBeVisible() on a shared fixture — these exist so
+// tests/stage-rail.spec.ts can assert `lightbox-image`'s src actually tracks
+// the current step (US-08 fix-wave finding B).
+const FIXTURE_PNG_PREVIEW =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGO45uCAFTEMLQkAjjdVgcCJedkAAAAASUVORK5CYII=";
+const FIXTURE_PNG_REFINE =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGNwOJGAFTEMLQkAItVaARoIkS0AAAAASUVORK5CYII=";
+const FIXTURE_PNG_REMESH =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGMIaHqGFTEMLQkA1b5uAf8fn6IAAAAASUVORK5CYII=";
+
+const succeededStage = (
+  id: string,
+  credits: number,
+  offset: number,
+  thumbnailUrl: string = FIXTURE_PNG,
+): Partial<FixtureStage> => ({
   status: "succeeded",
   taskId: id,
   progress: 100,
   creditCost: credits,
   modelUrl: `https://assets.meshy.test/${id}.glb`,
-  thumbnailUrl: FIXTURE_PNG,
+  thumbnailUrl,
   startedAt: Date.now() - 300_000 + offset,
   completedAt: Date.now() - 300_000 + offset + 82_000,
 });
@@ -230,7 +247,12 @@ test("enlarge: thumbnail opens the lightbox, Esc closes it and restores focus", 
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute("role", "dialog");
   await expect(dialog).toHaveAttribute("aria-modal", "true");
-  await expect(page.getByTestId("lightbox-caption")).toHaveText("preview · 20c · 1:22");
+  const caption = page.getByTestId("lightbox-caption");
+  await expect(caption).toHaveText("preview · 20c · 1:22");
+  // A screen-reader user stepping between stages has no other channel: the
+  // dialog's own aria-label doesn't reliably re-announce on an already-
+  // focused element (US-08 fix-wave finding D).
+  await expect(caption).toHaveAttribute("aria-live", "polite");
   await expect(page.getByTestId("lightbox-image")).toBeVisible();
 
   // Enlarging must not toggle the row's API panel (US-04 owns that click).
@@ -288,16 +310,21 @@ test("enlarge: steps across landed mesh stages and stops at the ends", async ({ 
   await seedRun(
     page,
     makeRun("running", {
-      preview: succeededStage("preview-0001", 20, 0),
-      refine: succeededStage("refine-0002", 10, 90_000),
-      remesh: succeededStage("remesh-0003", 5, 180_000),
+      preview: succeededStage("preview-0001", 20, 0, FIXTURE_PNG_PREVIEW),
+      refine: succeededStage("refine-0002", 10, 90_000, FIXTURE_PNG_REFINE),
+      remesh: succeededStage("remesh-0003", 5, 180_000, FIXTURE_PNG_REMESH),
     }),
   );
   await page.goto("/");
 
   await page.getByTestId("enlarge-refine").click();
   const caption = page.getByTestId("lightbox-caption");
+  const image = page.getByTestId("lightbox-image");
   await expect(caption).toHaveText("refine · 10c · 1:22");
+  // Distinct per-stage fixtures: an implementation that always rendered
+  // artifacts[0] would fail here even though every other assertion in this
+  // suite would still pass (US-08 fix-wave finding B's regression test).
+  await expect(image).toHaveAttribute("src", FIXTURE_PNG_REFINE);
 
   // Opening mid-list means both directions are live.
   await expect(page.getByTestId("lightbox-prev")).toBeEnabled();
@@ -305,13 +332,16 @@ test("enlarge: steps across landed mesh stages and stops at the ends", async ({ 
 
   await page.getByTestId("lightbox-next").click();
   await expect(caption).toHaveText("remesh · 5c · 1:22");
+  await expect(image).toHaveAttribute("src", FIXTURE_PNG_REMESH);
   await expect(page.getByTestId("lightbox-next")).toBeDisabled();
 
   // Keyboard mirrors the arrows.
   await page.keyboard.press("ArrowLeft");
   await expect(caption).toHaveText("refine · 10c · 1:22");
+  await expect(image).toHaveAttribute("src", FIXTURE_PNG_REFINE);
   await page.keyboard.press("ArrowLeft");
   await expect(caption).toHaveText("preview · 20c · 1:22");
+  await expect(image).toHaveAttribute("src", FIXTURE_PNG_PREVIEW);
   await expect(page.getByTestId("lightbox-prev")).toBeDisabled();
 
   // At the start, ArrowLeft is inert rather than wrapping.
@@ -340,6 +370,124 @@ test("enlarge: a lone artifact has no live arrows", async ({ page }) => {
   await expect(page.getByTestId("lightbox-prev")).toBeDisabled();
   await expect(page.getByTestId("lightbox-next")).toBeDisabled();
   await expect(page.getByTestId("lightbox-dots").locator("[data-dot]")).toHaveCount(1);
+});
+
+// Every fixture above sets thumbnailUrl, so the GLB fallback branch
+// (artifact-lightbox.tsx's snapshotGlb path) never executes anywhere else in
+// this suite — both C findings from the US-08 fix wave lived in that
+// uncovered branch. These two tests force it: a dead thumbnail URL routing
+// to a successful snapshot, and a stepped-to artifact whose snapshot itself
+// fails.
+
+test("enlarge: a dead thumbnail image falls back to the GLB snapshot render", async ({
+  page,
+}) => {
+  await seedRun(
+    page,
+    makeRun("running", {
+      preview: {
+        ...succeededStage("preview-0001", 20, 0),
+        // Same-origin 404 — deterministic, no real network dependency. A
+        // real gallery mesh backs the fallback render so this is an actual
+        // successful WebGL snapshot, not just a state-machine assertion.
+        thumbnailUrl: "/this-thumbnail-does-not-exist.png",
+        modelUrl: "/gallery/knight/rig.8d812819.glb",
+      },
+    }),
+  );
+  await page.goto("/");
+
+  await page.getByTestId("enlarge-preview").click();
+  const image = page.getByTestId("lightbox-image");
+  // onError on the dead <img> routes this artifact to the snapshot path
+  // (US-08 fix-wave finding C) instead of showing a broken-image icon.
+  await expect(image).toHaveAttribute("src", /^data:image\/png;base64,/, { timeout: 15_000 });
+});
+
+test("enlarge: stepping to a null-thumbnail artifact clears the stale image and settles on failure", async ({
+  page,
+}) => {
+  // Aborted at the network layer so the GLB render deterministically fails
+  // without depending on real DNS resolution for the fake host.
+  await page.route("**/unreachable-refine.glb", (route) => route.abort());
+  await seedRun(
+    page,
+    makeRun("running", {
+      // Also thumbnail-less, so its `fallback` state gets populated with a
+      // real rendered snapshot before we step away from it — otherwise this
+      // test can't reproduce finding B (there'd be nothing stale to leak).
+      preview: {
+        ...succeededStage("preview-0001", 20, 0),
+        thumbnailUrl: null,
+        modelUrl: "/gallery/knight/rig.8d812819.glb",
+      },
+      refine: {
+        ...succeededStage("refine-0002", 10, 90_000),
+        thumbnailUrl: null,
+        modelUrl: "https://assets.meshy.test/unreachable-refine.glb",
+      },
+    }),
+  );
+  await page.goto("/");
+
+  await page.getByTestId("enlarge-preview").click();
+  const image = page.getByTestId("lightbox-image");
+  const frame = page.getByTestId("lightbox-frame");
+  // Preview's snapshot renders for real before we step away from it.
+  await expect(image).toHaveAttribute("src", /^data:image\/png;base64,/, { timeout: 15_000 });
+
+  await page.getByTestId("lightbox-next").click();
+  await expect(page.getByTestId("lightbox-caption")).toHaveText("refine · 10c · 1:22");
+  // The stale preview snapshot must not linger under the refine caption
+  // while (or after) refine's own snapshot fails to render — this is the
+  // exact bug finding B describes: `fallback` never reset on step, so the
+  // previous artifact's rendered image showed under the new caption.
+  await expect(image).toHaveCount(0);
+
+  // Settles to a failure affordance instead of pulsing forever.
+  await expect(page.getByTestId("lightbox-artifact-error")).toBeVisible({ timeout: 15_000 });
+  await expect(frame).not.toHaveClass(/animate-pulse/);
+  await expect(image).toHaveCount(0);
+});
+
+test("enlarge: the dialog portals to document.body", async ({ page }) => {
+  await seedRun(page, makeRun("running", { preview: succeededStage("preview-0001", 20, 0) }));
+  await page.goto("/");
+
+  await page.getByTestId("enlarge-preview").click();
+  const scrim = page.getByTestId("lightbox-scrim");
+  await expect(scrim).toBeVisible();
+  // Spec REQUIREMENT 8: escapes the rail's overflow-y-auto / mobile bottom
+  // sheet by portaling to body, not rendering in the rail's own tree.
+  await expect(await scrim.evaluate((el) => el.parentElement === document.body)).toBe(true);
+});
+
+test("enlarge: the enlarged image is meaningfully larger than the rail thumbnail at both breakpoints", async ({
+  page,
+}) => {
+  await seedRun(page, makeRun("running", { preview: succeededStage("preview-0001", 20, 0) }));
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+  await page.getByTestId("enlarge-preview").click();
+  const mobileBox = await page.getByTestId("lightbox-image").boundingBox();
+  expect(mobileBox).not.toBeNull();
+  // Before the fix-wave sizing fix this measured ~190px — smaller than the
+  // preview-gate's own ~300px review square. It must now exceed that square,
+  // or "enlarge" no longer means enlarge on mobile (fix-wave finding A).
+  expect(mobileBox!.width).toBeGreaterThan(305);
+  expect(mobileBox!.width).toBeLessThan(375);
+  await page.getByTestId("lightbox-close").click();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.reload();
+  await page.getByTestId("enlarge-preview").click();
+  const desktopBox = await page.getByTestId("lightbox-image").boundingBox();
+  expect(desktopBox).not.toBeNull();
+  // Comfortably close to the 640px frame cap now that the arrows overlay the
+  // image instead of flanking it.
+  expect(desktopBox!.width).toBeGreaterThan(550);
+  expect(desktopBox!.width).toBeLessThan(640);
 });
 
 test("preview gate: the review image opens the lightbox", async ({ page }) => {
