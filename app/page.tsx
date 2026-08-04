@@ -1,5 +1,6 @@
 "use client";
 
+import { LivePipeline } from "@/components/pipeline/live-pipeline";
 import { DEFAULT_CHARACTER } from "@/components/scene/default-character";
 import { Playground } from "@/components/scene/playground";
 
@@ -19,6 +20,10 @@ export default function Home() {
           </p>
         </div>
       </header>
+
+      {/* --- US-03a: live pipeline (key entry, prompt, minimal stage list) --- */}
+      <LivePipeline />
+      {/* --- end US-03a --- */}
     </main>
   );
 }
