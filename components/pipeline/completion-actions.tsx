@@ -15,6 +15,7 @@ import {
   completionReceipt,
   downloadPlan,
   generatedCharacterSource,
+  PLAYGROUND_URL,
   runAssetsExpired,
 } from "./completion";
 
@@ -136,6 +137,24 @@ export function CompletionActions({
           )}
         </>
       )}
+
+      {/* US-09: the "go deeper" nudge — a real link (cmd-click, a11y) whose
+          clipboard handoff is best-effort. The playground ignores URL params,
+          so the clipboard is the only way the prompt travels. */}
+      <a
+        href={PLAYGROUND_URL}
+        target="_blank"
+        rel="noopener"
+        data-testid="playground-cta"
+        className="group flex flex-col gap-0.5 rounded-sm border-t border-border px-1 pt-2 pb-1 font-mono text-xs transition-transform duration-(--duration-fast) ease-(--ease-stage) focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-[0.98] motion-reduce:transition-none"
+      >
+        <span className="text-foreground group-hover:text-accent">
+          Explore more in the API Playground <span aria-hidden="true">↗</span>
+        </span>
+        <span data-testid="playground-cta-caption" className="text-muted">
+          Click copies your prompt
+        </span>
+      </a>
     </div>
   );
 }

@@ -17,6 +17,14 @@ import type { CharacterSource } from "../scene/clip-binding";
 /** Meshy keeps result assets ~3 days; past this the signed URLs 403. */
 export const ASSET_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
 
+/**
+ * Meshy's Text to 3D playground. Its form state ignores URL params entirely
+ * (verified against production in the CLI's --playground work) — the prompt
+ * travels via clipboard, never the URL.
+ */
+export const PLAYGROUND_URL =
+  "https://www.meshy.ai/api-playground/text-to-3d/preview";
+
 const SLUG_MAX_LENGTH = 40;
 
 /** "A Sky Knight!" → "a-sky-knight" — filenames a filesystem won't fight. */
