@@ -104,8 +104,20 @@ test("game-ready character.glb downloads as one real file", async ({ page }) => 
   await page.goto("/");
   // First gallery entry's card on stage → its download disclosure (desktop-only UI).
   await page.getByTestId("gallery-download-toggle-knight").click();
+
+  // Regression guard: the game-ready row's label ("game-ready · X.X MB") must
+  // not clip — it wraps (break-words) instead of the other rows' truncate,
+  // so its label span's content must never exceed its box.
+  const row = page.getByTestId("gallery-download-knight.glb");
+  const overflow = await row.evaluate((link) => {
+    const label = link.querySelector("span:last-child");
+    if (!label) throw new Error("game-ready row is missing its label span");
+    return { scrollWidth: label.scrollWidth, clientWidth: label.clientWidth };
+  });
+  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+
   const downloadPromise = page.waitForEvent("download");
-  await page.getByTestId("gallery-download-knight.glb").click();
+  await row.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("knight.glb");
   const path = await download.path();
