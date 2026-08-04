@@ -12,11 +12,14 @@
  * P2 US-07 — this builds the structure (ring, tick, thumbnail slot) only.
  */
 
+import { useState } from "react";
 import {
   ANIMATION_CLIPS,
+  type PipelineRun,
   type StageId,
   type StageState,
 } from "../../lib/meshy/types";
+import { ApiPanel } from "./api-panel";
 import { ArtifactThumbnail } from "./artifact-thumbnail";
 import { ProgressRing } from "./progress-ring";
 import { rowPresentation, stageDisplayName } from "./stage-meta";
@@ -35,16 +38,20 @@ const ROW_ENTRANCE =
   "transition-[opacity,translate] duration-(--duration-slow) ease-(--ease-stage) starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none";
 
 function StageRow({
+  run,
   state,
   index,
   compact = false,
 }: {
+  run: PipelineRun;
   state: StageState;
   index: number;
   compact?: boolean;
 }) {
   const { kind, meta } = rowPresentation(state);
   const name = stageDisplayName(state.stage);
+  // US-04: every row expands to the API call that produced it.
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <li
@@ -53,7 +60,14 @@ function StageRow({
       style={staggerStyle(index)}
       className={`flex flex-col gap-1 ${ROW_ENTRANCE}`}
     >
-      <span className={`flex items-center gap-3 ${compact ? "min-h-5" : "min-h-6"}`}>
+      <button
+        type="button"
+        data-testid={`stage-toggle-${state.stage}`}
+        aria-expanded={expanded}
+        aria-controls={`api-panel-${state.stage}`}
+        onClick={() => setExpanded((open) => !open)}
+        className={`flex w-full items-center gap-3 rounded-sm text-left hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:bg-elevated disabled:cursor-not-allowed disabled:opacity-40 ${compact ? "min-h-5" : "min-h-6"}`}
+      >
         <ProgressRing kind={kind} progress={state.progress} compact={compact} />
         <span
           className={`font-mono text-xs uppercase tracking-caps ${
@@ -78,7 +92,23 @@ function StageRow({
         {kind === "succeeded" && MESH_STAGES.has(state.stage) && state.modelUrl !== null && (
           <ArtifactThumbnail url={state.modelUrl} label={state.stage} />
         )}
-      </span>
+        {/* Caret — the only affordance hint; rotates open, transform-only. */}
+        <svg
+          viewBox="0 0 8 8"
+          aria-hidden
+          className={`size-2 shrink-0 stroke-muted transition-transform duration-(--duration-fast) ease-(--ease-stage) motion-reduce:transition-none ${
+            expanded ? "rotate-90" : ""
+          }`}
+          fill="none"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 1.5L5.5 4 3 6.5" />
+        </svg>
+      </button>
+
+      {expanded && <ApiPanel run={run} stage={state.stage} />}
 
       {/* US-06 owns failure copy/retry — render the verbatim error plainly. */}
       {state.error !== null && (
@@ -107,7 +137,7 @@ export function StageRail() {
     >
       <ol className="flex flex-col gap-2">
         {LINEAR_ROWS.map((stage, index) => (
-          <StageRow key={stage} state={run.stages[stage]} index={index} />
+          <StageRow key={stage} run={run} state={run.stages[stage]} index={index} />
         ))}
       </ol>
 
@@ -125,6 +155,7 @@ export function StageRail() {
           {ANIMATION_CLIPS.map((clip, index) => (
             <StageRow
               key={clip}
+              run={run}
               state={run.stages[`animate:${clip}`]}
               index={LINEAR_ROWS.length + 1 + index}
               compact

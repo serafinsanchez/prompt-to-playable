@@ -1,12 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
+import { STORAGE_KEY as RUN_STORAGE_KEY, STORAGE_VERSION } from "../lib/meshy/storage";
+
 // US-03b acceptance: the rail renders every stage state from scripted fixture
 // runs seeded straight into localStorage (the store hydrates them) — no live
 // API. Covers all-states rendering, queue-depth honesty, failure surface,
 // keyboard reachability, and a reduced-motion snapshot.
-
-const RUN_STORAGE_KEY = "prompt-to-playable:pipeline-run";
-const STORAGE_VERSION = 3; // mirror of lib/meshy/storage.ts — envelope contract
 
 const STAGES = [
   "preview",
