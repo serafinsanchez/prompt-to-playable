@@ -3,7 +3,7 @@
  * (Armature > Hips > Spine), a minimal skinned triangle, and rotation clips
  * with a known world yaw on Hips. Kilobytes, not the 8 MB real thing.
  */
-import { Document } from "@gltf-transform/core";
+import { Document, NodeIO } from "@gltf-transform/core";
 import { KHRMaterialsSpecular } from "@gltf-transform/extensions";
 import * as THREE from "three";
 
@@ -134,4 +134,21 @@ export function makeClipDoc(
   }
   addRotationClip(document, "take001", yawDegrees, options.boneName ?? "Hips");
   return document;
+}
+
+/**
+ * Read/write a fixture document through THIS module's own `@gltf-transform/core`
+ * import — never import `NodeIO` directly in a standalone script alongside these
+ * builders. Node module resolution can hand a `.mts` script and this `.ts` file
+ * two separate instances of `@gltf-transform/core` (e.g. under `npx tsx`), and
+ * NodeIO's writer silently drops any property that isn't `instanceof` its own
+ * `Document`/`Accessor`/etc. classes — every accessor gets stripped with no
+ * error. Routing all I/O through here keeps builder and writer on one instance.
+ */
+export async function writeFixtureGlb(document: Document): Promise<Uint8Array> {
+  return new NodeIO().writeBinary(document);
+}
+
+export async function readFixtureGlb(bytes: Uint8Array): Promise<Document> {
+  return new NodeIO().readBinary(bytes);
 }
