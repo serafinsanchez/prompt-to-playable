@@ -32,57 +32,13 @@ Every triaged spec gets one. Drives which execution skill runs and which verific
 | Phase | Theme | Status | Work items |
 |-------|-------|--------|------------|
 | P0 | Foundation — prove the pipeline, stand the stage | **Complete** — 0 open / 4 done | `docs/backlog/phase-0-foundation.md` |
-| P1 | The demo — playable gallery + live generation | **Open** — 1 open / 10 done, triaged 2026-08-03 | `docs/backlog/phase-1-the-demo.md` |
-| P2 | Polish + content + ship | Planned — items in Inbox | — |
+| P1 | The demo — playable gallery + live generation | **Open** — 2 open / 10 done, triaged 2026-08-03 | `docs/backlog/phase-1-the-demo.md` |
+| P2 | Polish + content + ship | **Open** — 5 open / 0 done, triaged 2026-08-03 | `docs/backlog/phase-2-ship.md` |
 
 ## Inbox
 
 _Untriaged items land here first._
 
-_P0 items triaged 2026-08-03 → `docs/backlog/phase-0-foundation.md` #1–#4. P1 items triaged 2026-08-03 → `docs/backlog/phase-1-the-demo.md` #1–#8 (originals in `docs/backlog/inbox-archive.md`)._
+_P0 items triaged 2026-08-03 → `docs/backlog/phase-0-foundation.md` #1–#4. P1 items triaged 2026-08-03 → `docs/backlog/phase-1-the-demo.md` #1–#8. P2 items triaged 2026-08-03 → `docs/backlog/phase-2-ship.md` #1–#5 (originals in `docs/backlog/inbox-archive.md`)._
 
-### TASK-12: Collapse per-stage dispatch into a stage-descriptor table
-**Description:** Adding remesh (TASK-11) required six coordinated edits across `lib/meshy/types.ts` + `pipeline.ts` (`StageId`, `PIPELINE_STAGES`, `STAGE_CREDITS`, plus the `createStageTask`/`pollStageTask` if-chains), and the if-chains fall through to the animate default with no compiler protection. Replace them with a single per-stage descriptor table (credits + create/poll lambdas) so adding a stage is a one-row change. Behavior-preserving refactor.
-**Acceptance criteria:**
-- [ ] `createStageTask`/`pollStageTask` if-chains replaced by table dispatch; existing 44 tests pass unchanged
-- [ ] A stage exists in exactly one declaration site (credits, create, poll together)
-**Priority:** P1
-**Notes:** From the 2026-08-03 thermo-nuclear review of TASK-11. Schedule before or with US-06 (stage retry) — it's the next spec that touches this dispatch and will otherwise grow the if-chains again.
-
-### Phase 2 — Polish + content + ship `[!]` (waiting for P1)
-
-### US-07: Feel the signature stage-completion moment
-**As a** visitor watching a generation, **I want** each stage completion to land as a designed beat (ring fills, tick, artifact clips in, rail advances), **so that** the minutes-long wait feels alive.
-**Acceptance criteria:**
-- [ ] Matches DESIGN.md motion spec incl. reduced-motion behavior; design-reviewer PASS
-**Priority:** P1
-**Phase:** P2
-
-### TASK-07: Performance + a11y budget pass
-**Description:** Verify <5s first playable frame on throttled broadband; bundle/asset audit; kit a11y spec + keyboard path + reduced-motion pass.
-**Acceptance criteria:**
-- [ ] Measured first-frame <5s (throttled); `tests/a11y.spec.ts` green
-**Priority:** P1
-**Phase:** P2
-
-### TASK-08: README as landing page + repo publish
-**Description:** Hero shot/GIF, live Vercel link up top, 60-second quickstart, how-the-pipeline-works with real API calls, credit-cost table, MIT license. Decide final public repo name (lean: `prompt-to-playable`) and publish.
-**Acceptance criteria:**
-- [ ] A dev who only reads the README can run it locally and knows what the API costs
-- [ ] Repo public, MIT, final name
-**Priority:** P0
-**Phase:** P2
-
-### TASK-09: Demo video (2–3 min), ready-to-publish
-**Description:** Record and edit: cold-open on gameplay (<10s in), live generation with the rail, API panel beat, download beat, closer. Script tight; captions.
-**Acceptance criteria:**
-- [ ] Watchable without audio; gameplay appears in the first 10 seconds; publish-ready export
-**Priority:** P0
-**Phase:** P2
-
-### TASK-10: Distribution plan + submission bundle
-**Description:** 1–2 paragraph distribution plan (communities, positioning, existing presence). Run the cold-visitor test with 2–3 people (15s metric). Check every line of the assignment PDF; send.
-**Acceptance criteria:**
-- [ ] 15s metric verified with real people; all three deliverables (project, content, plan) bundled and submitted
-**Priority:** P0
-**Phase:** P2
+_(empty)_

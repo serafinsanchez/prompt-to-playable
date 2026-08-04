@@ -2,6 +2,51 @@
 
 Triaged and resolved inbox items, newest first. Original bodies preserved for provenance.
 
+### [x] triaged → Phase 1 #9 TASK-12: Collapse per-stage dispatch into a stage-descriptor table
+**Description:** Adding remesh (TASK-11) required six coordinated edits across `lib/meshy/types.ts` + `pipeline.ts` (`StageId`, `PIPELINE_STAGES`, `STAGE_CREDITS`, plus the `createStageTask`/`pollStageTask` if-chains), and the if-chains fall through to the animate default with no compiler protection. Replace them with a single per-stage descriptor table (credits + create/poll lambdas) so adding a stage is a one-row change. Behavior-preserving refactor.
+**Acceptance criteria:**
+- [ ] `createStageTask`/`pollStageTask` if-chains replaced by table dispatch; existing 44 tests pass unchanged
+- [ ] A stage exists in exactly one declaration site (credits, create, poll together)
+**Priority:** P1
+**Notes:** From the 2026-08-03 thermo-nuclear review of TASK-11. "Schedule before or with US-06" window closed (US-06 already in progress at triage); user chose 2026-08-03 to run it now on an isolated branch — coordination note in the spec's CONSTRAINTS.
+
+### [x] triaged → Phase 2 #1 US-07: Feel the signature stage-completion moment
+**As a** visitor watching a generation, **I want** each stage completion to land as a designed beat (ring fills, tick, artifact clips in, rail advances), **so that** the minutes-long wait feels alive.
+**Acceptance criteria:**
+- [ ] Matches DESIGN.md motion spec incl. reduced-motion behavior; design-reviewer PASS
+**Priority:** P1
+**Phase:** P2
+
+### [x] triaged → Phase 2 #2 TASK-07: Performance + a11y budget pass
+**Description:** Verify <5s first playable frame on throttled broadband; bundle/asset audit; kit a11y spec + keyboard path + reduced-motion pass.
+**Acceptance criteria:**
+- [ ] Measured first-frame <5s (throttled); `tests/a11y.spec.ts` green
+**Priority:** P1
+**Phase:** P2
+
+### [x] triaged → Phase 2 #3 TASK-08: README as landing page + repo publish
+**Description:** Hero shot/GIF, live Vercel link up top, 60-second quickstart, how-the-pipeline-works with real API calls, credit-cost table, MIT license. Decide final public repo name (lean: `prompt-to-playable`) and publish.
+**Acceptance criteria:**
+- [ ] A dev who only reads the README can run it locally and knows what the API costs
+- [ ] Repo public, MIT, final name
+**Priority:** P0
+**Phase:** P2
+**Triage note:** repo found already public under the final name with a description; the spec narrows to README + LICENSE + hero + a history-hygiene check.
+
+### [x] triaged → Phase 2 #4 TASK-09: Demo video (2–3 min), ready-to-publish
+**Description:** Record and edit: cold-open on gameplay (<10s in), live generation with the rail, API panel beat, download beat, closer. Script tight; captions.
+**Acceptance criteria:**
+- [ ] Watchable without audio; gameplay appears in the first 10 seconds; publish-ready export
+**Priority:** P0
+**Phase:** P2
+
+### [x] triaged → Phase 2 #5 TASK-10: Distribution plan + submission bundle
+**Description:** 1–2 paragraph distribution plan (communities, positioning, existing presence). Run the cold-visitor test with 2–3 people (15s metric). Check every line of the assignment PDF; send.
+**Acceptance criteria:**
+- [ ] 15s metric verified with real people; all three deliverables (project, content, plan) bundled and submitted
+**Priority:** P0
+**Phase:** P2
+
 ### [x] triaged → Phase 1 #1 TASK-11: Add the remesh stage to the pipeline state machine
 **Description:** Insert `remesh` into `StageId` / `PIPELINE_STAGES` / `STAGE_CREDITS` (5c, total 55) and `LINEAR_STAGES`; chain remesh off refine and rig off remesh, `target_polycount: 30000` (spike-validated). Extend the fixture-transport tests to the 6-stage linear head. Blocks any live-generation UI: rig 400s on raw refine output (day-0 spike, ARCHITECTURE §4 + Trade-off log 2026-08-03).
 **Acceptance criteria:**
