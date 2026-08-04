@@ -2,7 +2,7 @@
 
 **Type a character. Play it.**
 
-![A knight generated from a text prompt, walking around the playable stage](docs/media/hero.gif)
+![A brass robot butler generated from a text prompt, walking and waving on the playable stage](docs/media/hero.gif)
 
 **[▶ Play it live](https://prompt-to-playable.vercel.app)** — no key, no signup. You're driving a character in about 15 seconds.
 
@@ -64,7 +64,7 @@ curl -X POST https://api.meshy.ai/openapi/v2/text-to-3d \
 
 Every request/response the demo makes is visible in the UI — the API panel next to each stage shows the live call with a copyable `curl` (key masked, always). The source of truth for those panels is [`components/pipeline/api-descriptor.ts`](components/pipeline/api-descriptor.ts), which derives each request from the typed client in [`lib/meshy/client.ts`](lib/meshy/client.ts) and is sync-tested against it — the docs can't drift from the code.
 
-![The knight on stage with the pipeline rail and per-stage credit costs](docs/media/hero.png)
+![The robot butler waving on stage, with the pipeline rail and per-stage credit costs](docs/media/hero.png)
 
 ## A few implementation notes
 
