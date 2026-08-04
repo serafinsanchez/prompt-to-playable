@@ -132,7 +132,12 @@ export interface StageState {
   haltReason?: string | null;
 }
 
-export type PipelineStatus = "idle" | "running" | "succeeded" | "failed";
+/**
+ * "awaiting-review" is the preview gate (gated machines only): preview
+ * succeeded and the machine paused for the visitor to approve or re-roll
+ * before the remaining ~35 credits are spent. Node runners never see it.
+ */
+export type PipelineStatus = "idle" | "running" | "awaiting-review" | "succeeded" | "failed";
 
 /**
  * One generation attempt. Plain serializable data: this is exactly what
@@ -152,6 +157,17 @@ export interface PipelineRun {
   rateLimitBackoffMs: number | null;
   /** Next tick at or after this clock time actually polls; earlier ticks no-op. */
   nextPollAt: number | null;
+  /**
+   * True once the visitor approved the preview at the gate; the gate never
+   * re-fires. Optional: pre-gate snapshots (and Node runs) exist without it.
+   */
+  previewApproved?: boolean;
+  /**
+   * Credits consumed by re-rolled previews whose stages were reset. Folded
+   * into creditsSpent so the total never understates real spend. Optional:
+   * pre-gate snapshots exist without it.
+   */
+  discardedCredits?: number;
 }
 
 // ---------------------------------------------------------------------------

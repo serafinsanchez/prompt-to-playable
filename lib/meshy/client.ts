@@ -10,6 +10,25 @@ import type { AnimationClip, MeshyTask } from "./types";
 import type { MeshyTransport } from "./transport";
 
 export const TEXT_TO_3D_PATH = "/openapi/v2/text-to-3d";
+
+/**
+ * Rig-friendly generation defaults, always sent on preview (docs.meshy.ai
+ * text-to-3d v2; `symmetry_mode`/`is_a_t_pose` are deprecated no-ops).
+ * A-pose over T-pose: auto-skinning handles ~45° shoulders better, and a
+ * neutral standing pose is what the rigging stage needs — action poses are
+ * the top cause of bad rigs and duplicated-limb artifacts.
+ */
+export const PREVIEW_POSE_MODE = "a-pose";
+/** Quads deform better under skinning than triangle soup. */
+export const PREVIEW_TOPOLOGY = "quad";
+
+/**
+ * Refine texture steer: generative texturing can't spell, so any prompt that
+ * implies logos or jersey lettering comes back as smudged glyphs. Sent on
+ * every refine alongside the mesh prompt.
+ */
+export const REFINE_TEXTURE_PROMPT =
+  "clean fabric and materials, no text, no logos, no lettering";
 export const RIGGING_PATH = "/openapi/v1/rigging";
 export const ANIMATIONS_PATH = "/openapi/v1/animations";
 export const REMESH_PATH = "/openapi/v1/remesh";
@@ -80,12 +99,18 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
 
   return {
     createPreviewTask: (prompt) =>
-      create(TEXT_TO_3D_PATH, { mode: "preview", prompt }),
+      create(TEXT_TO_3D_PATH, {
+        mode: "preview",
+        prompt,
+        pose_mode: PREVIEW_POSE_MODE,
+        topology: PREVIEW_TOPOLOGY,
+      }),
     createRefineTask: (previewTaskId) =>
       create(TEXT_TO_3D_PATH, {
         mode: "refine",
         preview_task_id: previewTaskId,
         enable_pbr: true,
+        texture_prompt: REFINE_TEXTURE_PROMPT,
       }),
     getTextTo3DTask: (taskId) => get(TEXT_TO_3D_PATH, taskId),
     createRigTask: (inputTaskId) => create(RIGGING_PATH, { input_task_id: inputTaskId }),

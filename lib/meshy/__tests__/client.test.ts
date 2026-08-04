@@ -5,6 +5,9 @@ import {
   ANIMATIONS_PATH,
   BALANCE_PATH,
   createMeshyClient,
+  PREVIEW_POSE_MODE,
+  PREVIEW_TOPOLOGY,
+  REFINE_TEXTURE_PROMPT,
   REMESH_PATH,
   RIGGING_PATH,
   taskGlbUrl,
@@ -20,7 +23,7 @@ import {
 } from "./fixtures";
 
 describe("createMeshyClient", () => {
-  it("createPreviewTask POSTs a v2 preview request and returns the task id", async () => {
+  it("createPreviewTask POSTs a v2 preview request with rig-friendly pose and topology", async () => {
     const { transport, calls } = makeFixtureTransport({
       [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
     });
@@ -29,10 +32,17 @@ describe("createMeshyClient", () => {
     const taskId = await client.createPreviewTask("a brave knight");
 
     expect(taskId).toBe("preview-0001");
-    expect(calls[0]!.body).toEqual({ mode: "preview", prompt: "a brave knight" });
+    expect(calls[0]!.body).toEqual({
+      mode: "preview",
+      prompt: "a brave knight",
+      pose_mode: PREVIEW_POSE_MODE,
+      topology: PREVIEW_TOPOLOGY,
+    });
+    expect(PREVIEW_POSE_MODE).toBe("a-pose");
+    expect(PREVIEW_TOPOLOGY).toBe("quad");
   });
 
-  it("createRefineTask chains by preview_task_id and enables PBR", async () => {
+  it("createRefineTask chains by preview_task_id with PBR and anti-lettering texture steer", async () => {
     const { transport, calls } = makeFixtureTransport({
       [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "refine-0002" } }],
     });
@@ -45,7 +55,10 @@ describe("createMeshyClient", () => {
       mode: "refine",
       preview_task_id: "preview-0001",
       enable_pbr: true,
+      texture_prompt: REFINE_TEXTURE_PROMPT,
     });
+    // Generative texturing can't spell — steer it away from lettering.
+    expect(REFINE_TEXTURE_PROMPT).toMatch(/no text/);
   });
 
   it("getTextTo3DTask GETs the v2 task by id", async () => {

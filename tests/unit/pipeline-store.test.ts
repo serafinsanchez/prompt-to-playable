@@ -22,6 +22,7 @@ import {
   TEXT_TO_3D_PATH,
 } from "../../lib/meshy/client";
 import { POLL_INTERVAL_MS } from "../../lib/meshy/pipeline";
+import { scaffoldPrompt } from "../../lib/meshy/prompt-craft";
 import { loadRun, saveRun, STORAGE_KEY, type StorageAdapter } from "../../lib/meshy/storage";
 import { MeshyApiError, type PipelineRun } from "../../lib/meshy/types";
 import {
@@ -175,6 +176,20 @@ describe("start and tick flow", () => {
     expect(store.getState().run?.stages.preview.status).toBe("succeeded");
   });
 
+  it("scaffolds the prompt with character phrasing before it reaches Meshy", async () => {
+    const { store, calls } = storeWith(happyTable());
+    store.getState().setKey("msy_test_key");
+
+    store.getState().start("  a basketball player  ");
+    await drain();
+
+    const previewBody = calls[0]?.body as { prompt: string };
+    expect(previewBody.prompt).toBe(scaffoldPrompt("a basketball player"));
+    // The run snapshot carries the scaffolded prompt too — the API panel
+    // shows exactly what was sent, never a prettied-up version.
+    expect(store.getState().run?.prompt).toBe(scaffoldPrompt("a basketball player"));
+  });
+
   it("refuses to start without a key or with a blank prompt", () => {
     const { store, calls } = storeWith(happyTable());
 
@@ -208,9 +223,19 @@ describe("start and tick flow", () => {
 
     store.getState().start("a bronze knight");
     await drain();
-    // Generous upper bound of ticks; the machine no-ops after terminal.
-    for (let i = 0; i < 12 && store.getState().run?.status === "running"; i += 1) {
-      await advance(POLL_INTERVAL_MS);
+    // Generous upper bound of ticks; the machine no-ops after terminal. The
+    // preview gate is approved as soon as it appears — this test is about the
+    // graph, the gate has its own describe.
+    for (let i = 0; i < 12; i += 1) {
+      const status = store.getState().run?.status;
+      if (status === "awaiting-review") {
+        store.getState().approvePreview();
+        await drain();
+      } else if (status === "running") {
+        await advance(POLL_INTERVAL_MS);
+      } else {
+        break;
+      }
     }
 
     const run = store.getState().run;
@@ -219,6 +244,115 @@ describe("start and tick flow", () => {
     expect(store.getState().ticking).toBe(false);
     expect(scheduler.callback).toBeNull();
     expect(scheduler.cleared).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preview gate
+// ---------------------------------------------------------------------------
+
+describe("preview gate", () => {
+  /** Start a run and advance until the preview succeeds and the gate holds. */
+  async function driveToGate(harness: ReturnType<typeof storeWith>): Promise<void> {
+    harness.store.getState().setKey("msy_test_key");
+    harness.store.getState().start("a basketball player");
+    await drain();
+    await harness.advance(POLL_INTERVAL_MS); // preview succeeds → gate
+    if (harness.store.getState().run?.status !== "awaiting-review") {
+      throw new Error("seed never reached the gate");
+    }
+  }
+
+  it("stops the ticker at the gate — no polls while the visitor decides", async () => {
+    const harness = storeWith(happyTable());
+    await driveToGate(harness);
+
+    expect(harness.store.getState().ticking).toBe(false);
+    expect(harness.scheduler.callback).toBeNull();
+    // Nothing beyond the preview create + poll ever left the store.
+    expect(harness.calls).toHaveLength(2);
+  });
+
+  it("approvePreview resumes ticking and the run completes", async () => {
+    const harness = storeWith(happyTable());
+    await driveToGate(harness);
+
+    harness.store.getState().approvePreview();
+    await drain();
+
+    expect(harness.store.getState().ticking).toBe(true);
+    for (let i = 0; i < 12 && harness.store.getState().run?.status === "running"; i += 1) {
+      await harness.advance(POLL_INTERVAL_MS);
+    }
+    expect(harness.store.getState().run?.status).toBe("succeeded");
+    expect(harness.store.getState().run?.creditsSpent).toBe(55);
+  });
+
+  it("rerollPreview re-creates the preview and keeps the discarded spend counted", async () => {
+    const harness = storeWith({
+      ...happyTable(),
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { body: { result: "preview-0001" } },
+        { body: { result: "preview-0002" } },
+      ],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { body: succeeded("preview-0001", 20) },
+        { body: succeeded("preview-0002", 20) },
+      ],
+    });
+    await driveToGate(harness);
+
+    harness.store.getState().rerollPreview();
+    await drain(); // immediate tick creates the second preview
+
+    expect(harness.store.getState().run?.stages.preview.taskId).toBe("preview-0002");
+    await harness.advance(POLL_INTERVAL_MS); // second preview succeeds → gate again
+
+    const run = harness.store.getState().run;
+    expect(run?.status).toBe("awaiting-review");
+    expect(run?.creditsSpent).toBe(40); // both previews, honestly counted
+    expect(loadRun(harness.runStorage)?.creditsSpent).toBe(40); // persisted too
+  });
+
+  it("hydrate restores an awaiting-review run without polling; approve resumes it", async () => {
+    const seed = storeWith(happyTable());
+    await driveToGate(seed);
+    const stored = seed.store.getState().run!;
+
+    const harness = storeWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "refine-0002" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [{ body: succeeded("refine-0002", 10) }],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
+    });
+    saveRun(harness.runStorage, stored);
+    harness.keyStorage.setItem(KEY_STORAGE_KEY, "msy_test_key");
+
+    harness.store.getState().hydrate();
+    await drain();
+
+    expect(harness.store.getState().run?.status).toBe("awaiting-review");
+    expect(harness.store.getState().ticking).toBe(false);
+    expect(harness.calls).toHaveLength(0);
+
+    harness.store.getState().approvePreview();
+    await drain();
+    expect(harness.store.getState().run?.stages.refine.taskId).toBe("refine-0002");
+  });
+
+  it("refuses to start a new run while one awaits review, and gate actions no-op keyless", async () => {
+    const harness = storeWith(happyTable());
+    await driveToGate(harness);
+    const callCount = harness.calls.length;
+
+    harness.store.getState().start("another character");
+    expect(harness.calls).toHaveLength(callCount); // no new preview
+
+    harness.store.getState().clearKey();
+    harness.store.getState().approvePreview();
+    harness.store.getState().rerollPreview();
+    await drain();
+    expect(harness.store.getState().run?.status).toBe("awaiting-review");
+    expect(harness.calls).toHaveLength(callCount);
   });
 });
 
@@ -272,7 +406,9 @@ describe("resume from storage", () => {
     seed.store.getState().setKey("msy_test_key");
     seed.store.getState().start("a bronze knight");
     await drain();
-    await seed.advance(POLL_INTERVAL_MS); // preview succeeds, refine created
+    await seed.advance(POLL_INTERVAL_MS); // preview succeeds → gate
+    seed.store.getState().approvePreview(); // wave it through
+    await drain(); // immediate tick creates refine
     const run = seed.store.getState().run;
     if (run?.stages.refine.taskId !== "refine-0002") throw new Error("seed did not reach mid-refine");
     return run;
@@ -407,8 +543,16 @@ describe("retry", () => {
     harness.store.getState().setKey("msy_test_key");
     harness.store.getState().start("an amorphous blob");
     await drain();
-    for (let i = 0; i < 8 && harness.store.getState().run?.status === "running"; i += 1) {
-      await harness.advance(POLL_INTERVAL_MS);
+    for (let i = 0; i < 10; i += 1) {
+      const status = harness.store.getState().run?.status;
+      if (status === "awaiting-review") {
+        harness.store.getState().approvePreview();
+        await drain();
+      } else if (status === "running") {
+        await harness.advance(POLL_INTERVAL_MS);
+      } else {
+        break;
+      }
     }
     if (harness.store.getState().run?.status !== "failed") throw new Error("seed did not fail at rig");
   }

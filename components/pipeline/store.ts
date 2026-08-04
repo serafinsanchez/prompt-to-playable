@@ -22,6 +22,7 @@ import {
   type Clock,
   type Pipeline,
 } from "../../lib/meshy/pipeline";
+import { scaffoldPrompt } from "../../lib/meshy/prompt-craft";
 import {
   clearRun,
   loadRun,
@@ -73,6 +74,10 @@ export interface PipelineStoreState {
   start(prompt: string): void;
   /** User-clicked retry of the failed stage (US-06): reuses upstream task ids, re-spends only that stage. */
   retry(): void;
+  /** Wave the gated preview through — refine and the rest of the spend proceed. */
+  approvePreview(): void;
+  /** Discard the gated preview (spend stays counted) and generate a fresh one. */
+  rerollPreview(): void;
   /** Terminal affordance: clearRun + reset to the idle prompt state. */
   startOver(): void;
   /** Unmount cleanup — interval off; a later hydrate() resumes it. */
@@ -146,11 +151,17 @@ export function createPipelineStore(
     /** Build a machine (fresh or restored) and mirror every emit into the store. */
     const attach = (run?: PipelineRun): Pipeline => {
       detach();
-      pipeline = createPipeline({ client, clock, ...(run !== undefined ? { run } : {}) });
+      pipeline = createPipeline({
+        client,
+        clock,
+        gatePreview: true, // browser runs pause for the visitor; Node runners never gate
+        ...(run !== undefined ? { run } : {}),
+      });
       unsubscribe = pipeline.subscribe((snapshot) => {
         saveRun(runStorage, snapshot);
         set({ run: snapshot });
-        if (isTerminal(snapshot)) stopTicking();
+        // The gate needs no polls — the machine sits until the visitor decides.
+        if (isTerminal(snapshot) || snapshot.status === "awaiting-review") stopTicking();
       });
       return pipeline;
     };
@@ -191,20 +202,27 @@ export function createPipelineStore(
           ...(storedKey !== null ? { apiKey: storedKey } : {}),
           ...(storedRun !== null ? { run: storedRun } : {}),
         });
-        if (storedRun !== null && storedRun.status === "running") {
+        if (
+          storedRun !== null &&
+          (storedRun.status === "running" || storedRun.status === "awaiting-review")
+        ) {
           attach(storedRun);
           // Key is sessionStorage, run is localStorage — a new tab restores
           // the run but not the key. Attach without ticking so setKey()'s
           // resumeTicker() picks it up; polling keyless would 401 into a
-          // "Key rejected" the visitor never earned.
-          if (storedKey !== null) startTicking();
+          // "Key rejected" the visitor never earned. A gated run never ticks
+          // here — the gate holds without polling.
+          if (storedKey !== null && storedRun.status === "running") startTicking();
         }
       },
 
       start: (prompt) => {
         const { apiKey, run } = get();
-        if (apiKey === "" || run?.status === "running" || prompt.trim() === "") return;
-        attach().start(prompt.trim()); // emit → subscriber saves + mirrors
+        const active = run?.status === "running" || run?.status === "awaiting-review";
+        if (apiKey === "" || active || prompt.trim() === "") return;
+        // Scaffolded, not raw: run.prompt is exactly what Meshy receives, so
+        // the API panel teaches the character phrasing instead of hiding it.
+        attach().start(scaffoldPrompt(prompt)); // emit → subscriber saves + mirrors
         startTicking();
       },
 
@@ -219,6 +237,23 @@ export function createPipelineStore(
         // flips out of "failed" on the click, not on the first poll.
         saveRun(runStorage, revived);
         set({ run: revived, tickError: null });
+        startTicking();
+      },
+
+      approvePreview: () => {
+        const { run, apiKey, keyError } = get();
+        // Keyless/rejected-key guard mirrors retry(): resuming would only 401.
+        if (run?.status !== "awaiting-review" || apiKey === "" || keyError !== null) return;
+        if (pipeline === null) return;
+        pipeline.approvePreview(); // emit → subscriber saves + mirrors
+        startTicking();
+      },
+
+      rerollPreview: () => {
+        const { run, apiKey, keyError } = get();
+        if (run?.status !== "awaiting-review" || apiKey === "" || keyError !== null) return;
+        if (pipeline === null) return;
+        pipeline.rerollPreview(); // emit → subscriber saves + mirrors
         startTicking();
       },
 

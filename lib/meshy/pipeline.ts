@@ -52,6 +52,14 @@ export interface CreatePipelineOptions {
   clock: Clock;
   /** Restored PipelineRun (from storage.ts) to resume instead of starting fresh. */
   run?: PipelineRun;
+  /**
+   * Pause at "awaiting-review" after preview succeeds, until approvePreview()
+   * or rerollPreview(). Preview is 20 credits; everything after is ~35 more —
+   * the gate lets the visitor kill a broken mesh before paying for it.
+   * Default off: Node runners (pregen, spike) loop on "running" and must
+   * never deadlock on a question no one is there to answer.
+   */
+  gatePreview?: boolean;
 }
 
 export interface Pipeline {
@@ -63,6 +71,10 @@ export interface Pipeline {
   start(prompt: string): PipelineRun;
   /** Advance the machine once. No-ops before nextPollAt or on a terminal run. */
   tick(): Promise<PipelineRun>;
+  /** Wave the gated preview through — the next tick creates refine. Throws off-gate. */
+  approvePreview(): PipelineRun;
+  /** Discard the gated preview (its credits stay counted) and re-create it. Throws off-gate. */
+  rerollPreview(): PipelineRun;
 }
 
 /** The linear head — every stage before the parallel animate group, in PIPELINE_STAGES order. */
@@ -164,15 +176,14 @@ export function retryFailedStage(run: PipelineRun): PipelineRun {
   next.waitingForQueue = false;
   next.rateLimitBackoffMs = null;
   next.nextPollAt = null; // the next tick polls immediately
-  next.creditsSpent = Object.values(next.stages).reduce(
-    (sum, stage) => sum + (stage.creditCost ?? 0),
-    0,
-  );
+  next.creditsSpent =
+    (next.discardedCredits ?? 0) +
+    Object.values(next.stages).reduce((sum, stage) => sum + (stage.creditCost ?? 0), 0);
   return next;
 }
 
 export function createPipeline(options: CreatePipelineOptions): Pipeline {
-  const { client, clock } = options;
+  const { client, clock, gatePreview = false } = options;
   let run: PipelineRun = options.run ? clone(options.run) : createEmptyRun("");
   const listeners = new Set<(run: PipelineRun) => void>();
   // Not persisted: a resumed machine starts its patience fresh.
@@ -208,10 +219,9 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
   };
 
   const recomputeCredits = (): void => {
-    run.creditsSpent = Object.values(run.stages).reduce(
-      (sum, stage) => sum + (stage.creditCost ?? 0),
-      0,
-    );
+    run.creditsSpent =
+      (run.discardedCredits ?? 0) +
+      Object.values(run.stages).reduce((sum, stage) => sum + (stage.creditCost ?? 0), 0);
   };
 
   const startStage = async (stage: StageId): Promise<void> => {
@@ -262,6 +272,12 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
       const state = run.stages[stage];
       if (state.status === "succeeded") continue;
       if (state.taskId === null) {
+        // The preview gate: refine is where the remaining spend commits, so a
+        // gated machine pauses here until the visitor approves or re-rolls.
+        if (stage === "refine" && gatePreview && run.previewApproved !== true) {
+          run.status = "awaiting-review";
+          return;
+        }
         await startStage(stage);
         return;
       }
@@ -308,6 +324,46 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
       run = createEmptyRun(prompt);
       run.status = "running";
       run.startedAt = clock.now();
+      emit();
+      return clone(run);
+    },
+
+    approvePreview: () => {
+      if (run.status !== "awaiting-review") {
+        throw new Error("approvePreview: run is not awaiting-review");
+      }
+      run.previewApproved = true;
+      run.status = "running";
+      run.nextPollAt = null; // the next tick creates refine immediately
+      emit();
+      return clone(run);
+    },
+
+    rerollPreview: () => {
+      if (run.status !== "awaiting-review") {
+        throw new Error("rerollPreview: run is not awaiting-review");
+      }
+      // The discarded preview's credits were really consumed — fold them into
+      // discardedCredits so the total keeps telling the truth.
+      run.discardedCredits =
+        (run.discardedCredits ?? 0) + (run.stages.preview.creditCost ?? 0);
+      run.stages.preview = {
+        stage: "preview",
+        status: "pending",
+        taskId: null,
+        progress: 0,
+        precedingTasks: null,
+        creditCost: null,
+        modelUrl: null,
+        thumbnailUrl: null,
+        startedAt: null,
+        completedAt: null,
+        error: null,
+        haltReason: null,
+      };
+      run.status = "running";
+      run.nextPollAt = null; // the next tick creates the new preview immediately
+      recomputeCredits();
       emit();
       return clone(run);
     },

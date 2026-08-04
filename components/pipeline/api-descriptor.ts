@@ -14,6 +14,9 @@
 import {
   ANIMATION_CLIP_ACTIONS,
   ANIMATIONS_PATH,
+  PREVIEW_POSE_MODE,
+  PREVIEW_TOPOLOGY,
+  REFINE_TEXTURE_PROMPT,
   REMESH_PATH,
   RIGGING_PATH,
   TEXT_TO_3D_PATH,
@@ -58,13 +61,19 @@ export function stageRequest(run: PipelineRun, stage: StageId): StageRequest {
   });
 
   if (stage === "preview") {
-    return request(TEXT_TO_3D_PATH, { mode: "preview", prompt: run.prompt });
+    return request(TEXT_TO_3D_PATH, {
+      mode: "preview",
+      prompt: run.prompt,
+      pose_mode: PREVIEW_POSE_MODE,
+      topology: PREVIEW_TOPOLOGY,
+    });
   }
   if (stage === "refine") {
     return request(TEXT_TO_3D_PATH, {
       mode: "refine",
       preview_task_id: taskIdOr(run, "preview", "<preview-task-id>"),
       enable_pbr: true,
+      texture_prompt: REFINE_TEXTURE_PROMPT,
     });
   }
   if (stage === "remesh") {

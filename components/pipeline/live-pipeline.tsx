@@ -11,6 +11,7 @@
 import { useEffect } from "react";
 import { CompletionActions } from "./completion-actions";
 import { KeyEntry } from "./key-entry";
+import { PreviewGate } from "./preview-gate";
 import { PromptBar } from "./prompt-bar";
 import { RunReadout } from "./run-readout";
 import { StageRail } from "./stage-rail";
@@ -66,6 +67,8 @@ export function LivePipeline({
           ) : (
             <RunReadout />
           )}
+          {/* The blockout review — renders only at "awaiting-review". */}
+          <PreviewGate />
           <StageRail />
           {terminal && (
             <button

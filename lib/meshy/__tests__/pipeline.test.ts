@@ -32,11 +32,11 @@ function testClock(): { clock: { now(): number }; set(t: number): void } {
   return { clock: { now: () => t }, set: (next) => (t = next) };
 }
 
-function pipelineWith(table: FixtureTable) {
+function pipelineWith(table: FixtureTable, options: { gatePreview?: boolean } = {}) {
   const { transport, calls } = makeFixtureTransport(table);
   const client = createMeshyClient(transport);
   const { clock, set } = testClock();
-  const pipeline = createPipeline({ client, clock });
+  const pipeline = createPipeline({ client, clock, ...options });
   return { pipeline, calls, set, client, clock };
 }
 
@@ -62,6 +62,125 @@ const ANIMATION_FIXTURES: FixtureTable = {
   [`POST ${ANIMATIONS_PATH}`]: ANIMATION_IDS.map((id) => ({ body: { result: id } })),
   [`GET ${ANIMATIONS_PATH}/:id`]: ANIMATION_IDS.map((id) => ({ body: animationSucceeded(id, 3) })),
 };
+
+describe("preview gate", () => {
+  /** Preview create + succeed, with a second POST entry for whatever follows. */
+  const gateTable = (): FixtureTable => ({
+    [`POST ${TEXT_TO_3D_PATH}`]: [
+      { body: { result: "preview-0001" } },
+      { body: { result: "next-0002" } },
+    ],
+    [`GET ${TEXT_TO_3D_PATH}/:id`]: [{ body: succeeded("preview-0001", 20) }],
+  });
+
+  /** Drive a gated machine to the pause: preview succeeded, nothing after. */
+  async function driveToGate(harness: ReturnType<typeof pipelineWith>): Promise<void> {
+    harness.pipeline.start("a basketball player");
+    await harness.pipeline.tick(); // creates preview
+    harness.set(POLL_INTERVAL_MS);
+    await harness.pipeline.tick(); // preview succeeds
+    if (harness.pipeline.getRun().status !== "awaiting-review") {
+      throw new Error("seed never reached the gate");
+    }
+  }
+
+  it("pauses at awaiting-review after preview succeeds — refine is NOT created", async () => {
+    const harness = pipelineWith(gateTable(), { gatePreview: true });
+    await driveToGate(harness);
+
+    const run = harness.pipeline.getRun();
+    expect(run.stages.preview.status).toBe("succeeded");
+    expect(run.stages.refine.taskId).toBeNull();
+    expect(run.creditsSpent).toBe(20);
+    expect(harness.calls.filter((c) => c.key === `POST ${TEXT_TO_3D_PATH}`)).toHaveLength(1);
+
+    // Further ticks are no-ops — the gate holds until the visitor decides.
+    harness.set(5 * POLL_INTERVAL_MS);
+    const callCount = harness.calls.length;
+    await harness.pipeline.tick();
+    expect(harness.calls.length).toBe(callCount);
+    expect(harness.pipeline.getRun().status).toBe("awaiting-review");
+  });
+
+  it("approvePreview resumes the run and the next tick creates refine", async () => {
+    const harness = pipelineWith(gateTable(), { gatePreview: true });
+    await driveToGate(harness);
+
+    const resumed = harness.pipeline.approvePreview();
+
+    expect(resumed.status).toBe("running");
+    harness.set(2 * POLL_INTERVAL_MS);
+    await harness.pipeline.tick();
+    const refineCreate = harness.calls.filter((c) => c.key === `POST ${TEXT_TO_3D_PATH}`)[1];
+    expect(JSON.parse(JSON.stringify(refineCreate!.body))).toMatchObject({
+      mode: "refine",
+      preview_task_id: "preview-0001",
+    });
+    // Approval sticks: the gate never re-fires on later ticks.
+    expect(harness.pipeline.getRun().status).toBe("running");
+  });
+
+  it("rerollPreview discards the mesh but not the spend, re-creates preview, and re-arms the gate", async () => {
+    const harness = pipelineWith(
+      {
+        [`POST ${TEXT_TO_3D_PATH}`]: [
+          { body: { result: "preview-0001" } },
+          { body: { result: "preview-0002" } },
+        ],
+        [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+          { body: succeeded("preview-0001", 20) },
+          { body: succeeded("preview-0002", 20) },
+        ],
+      },
+      { gatePreview: true },
+    );
+    await driveToGate(harness);
+
+    const rerolled = harness.pipeline.rerollPreview();
+
+    expect(rerolled.status).toBe("running");
+    expect(rerolled.stages.preview.status).toBe("pending");
+    expect(rerolled.stages.preview.taskId).toBeNull();
+    // The first preview's 20 credits were really consumed — the total never lies.
+    expect(rerolled.creditsSpent).toBe(20);
+
+    harness.set(2 * POLL_INTERVAL_MS);
+    await harness.pipeline.tick(); // creates the second preview
+    expect(harness.pipeline.getRun().stages.preview.taskId).toBe("preview-0002");
+    harness.set(3 * POLL_INTERVAL_MS);
+    await harness.pipeline.tick(); // second preview succeeds → gate again
+
+    const run = harness.pipeline.getRun();
+    expect(run.status).toBe("awaiting-review");
+    expect(run.creditsSpent).toBe(40); // both previews, honestly counted
+  });
+
+  it("approvePreview and rerollPreview throw when the run is not at the gate", async () => {
+    const harness = pipelineWith(gateTable(), { gatePreview: true });
+    harness.pipeline.start("a basketball player");
+
+    expect(() => harness.pipeline.approvePreview()).toThrow(/awaiting-review/);
+    expect(() => harness.pipeline.rerollPreview()).toThrow(/awaiting-review/);
+  });
+
+  it("an ungated machine (Node runners) never pauses", async () => {
+    const harness = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { body: { result: "preview-0001" } },
+        { body: { result: "refine-0002" } },
+      ],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [{ body: succeeded("preview-0001", 20) }],
+    });
+    harness.pipeline.start("a basketball player");
+    await harness.pipeline.tick();
+    harness.set(POLL_INTERVAL_MS);
+    await harness.pipeline.tick(); // preview succeeds AND refine is created
+
+    const run = harness.pipeline.getRun();
+    expect(run.status).toBe("running");
+    expect(run.stages.refine.taskId).toBe("refine-0002");
+  });
+});
 
 describe("createEmptyRun", () => {
   it("starts idle with all nine stages pending and nothing spent", () => {
@@ -104,7 +223,7 @@ describe("pipeline happy path", () => {
     let run = pipeline.getRun();
     expect(run.stages.preview.status).toBe("running");
     expect(run.stages.preview.taskId).toBe("preview-0001");
-    expect(JSON.parse(JSON.stringify(calls[0]!.body))).toEqual({
+    expect(JSON.parse(JSON.stringify(calls[0]!.body))).toMatchObject({
       mode: "preview",
       prompt: "a brave knight",
     });
