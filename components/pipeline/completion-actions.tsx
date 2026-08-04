@@ -9,16 +9,20 @@
  * to honest copy instead of broken buttons.
  */
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { PipelineRun } from "../../lib/meshy/types";
 import {
   completionReceipt,
   downloadPlan,
   generatedCharacterSource,
+  PLAYGROUND_URL,
   runAssetsExpired,
 } from "./completion";
 
 export const EXPIRED_COPY = "Assets expired. Meshy keeps results for 3 days.";
+
+/** How long the "Prompt copied" confirmation holds before reverting. */
+export const COPIED_FEEDBACK_MS = 2000;
 
 export interface CompletionActionsProps {
   run: PipelineRun;
@@ -38,6 +42,32 @@ export function CompletionActions({
 }: CompletionActionsProps) {
   const [downloadsOpen, setDownloadsOpen] = useState(false);
   const downloadsId = useId();
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<number | null>(null);
+
+  // Clear a pending revert if the card unmounts mid-feedback.
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  // Best-effort: never preventDefault, never block navigation on the promise
+  // (spec CONSTRAINTS). If clipboard is unavailable or rejects, the link has
+  // already navigated — silence is the correct feedback.
+  const handlePlaygroundClick = () => {
+    navigator.clipboard?.writeText(run.prompt).then(
+      () => {
+        setCopied(true);
+        if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+        copiedTimer.current = window.setTimeout(
+          () => setCopied(false),
+          COPIED_FEEDBACK_MS,
+        );
+      },
+      () => {},
+    );
+  };
   // Wall-clock lives in state, never read during render (react-hooks/purity);
   // the block waits one frame for it so an expired run never flashes buttons.
   const [now, setNow] = useState<number | null>(null);
@@ -136,6 +166,35 @@ export function CompletionActions({
           )}
         </>
       )}
+
+      {/* US-09: the "go deeper" nudge — a real link (cmd-click, a11y) whose
+          clipboard handoff is best-effort. The playground ignores URL params,
+          so the clipboard is the only way the prompt travels. */}
+      {/* Divider on a wrapper, not the anchor: the focus ring must hug the
+          link content, not the card's structural rule. */}
+      <div className="border-t border-border pt-2">
+        <a
+          href={PLAYGROUND_URL}
+          target="_blank"
+          rel="noopener"
+          data-testid="playground-cta"
+          onClick={handlePlaygroundClick}
+          className="group flex flex-col gap-1 rounded-sm px-1 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+        >
+          <span className="text-foreground group-hover:text-accent">
+            {/* NBSP: the arrow must never orphan-wrap onto its own line. */}
+            Explore more in the API Playground{" "}
+            <span aria-hidden="true">↗</span>
+          </span>
+          <span
+            key={copied ? "copied" : "hint"}
+            data-testid="playground-cta-caption"
+            className="text-muted transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
+          >
+            {copied ? "Prompt copied" : "Click copies your prompt"}
+          </span>
+        </a>
+      </div>
     </div>
   );
 }

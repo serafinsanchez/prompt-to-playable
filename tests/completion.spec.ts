@@ -191,4 +191,48 @@ test("a run past Meshy's 3-day retention shows honest copy, no dead buttons", as
   await expect(page.getByTestId("download-toggle")).toHaveCount(0);
   // Start over stays available — the honest exit (US-03a affordance).
   await expect(page.getByTestId("start-over")).toBeVisible();
+  // US-09: the playground CTA is the one action that survives expiry.
+  await expect(page.getByTestId("playground-cta")).toBeVisible();
+});
+
+test("completion card links out to the API playground", async ({ page }) => {
+  await seedRun(page, makeSucceededRun(60_000));
+  await page.goto("/");
+
+  const cta = page.getByTestId("playground-cta");
+  await expect(cta).toBeVisible();
+  await expect(cta).toHaveAttribute(
+    "href",
+    "https://www.meshy.ai/api-playground/text-to-3d/preview",
+  );
+  await expect(cta).toHaveAttribute("target", "_blank");
+  await expect(cta).toHaveAttribute("rel", "noopener");
+  await expect(page.getByTestId("playground-cta-caption")).toHaveText(
+    "Click copies your prompt",
+  );
+});
+
+// Clipboard APIs need explicit permissions (Chromium) — scoped to this block.
+test.describe("playground CTA clipboard handoff", () => {
+  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+  test("clicking copies the run's prompt and confirms inline", async ({ page }) => {
+    // Keep CI hermetic: the new tab must never actually load meshy.ai.
+    await page.context().route("https://www.meshy.ai/**", (route) => route.abort());
+    await seedRun(page, makeSucceededRun(60_000));
+    await page.goto("/");
+
+    const popupPromise = page.waitForEvent("popup");
+    await page.getByTestId("playground-cta").click();
+    const popup = await popupPromise;
+    await popup.close();
+
+    await page.bringToFront(); // clipboard.readText needs the focused document
+    await expect(page.getByTestId("playground-cta-caption")).toHaveText(
+      "Prompt copied",
+    );
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      "a bronze knight with a tower shield",
+    );
+  });
 });
