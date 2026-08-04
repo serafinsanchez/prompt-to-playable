@@ -23,9 +23,10 @@ import {
   type StageState,
 } from "../../lib/meshy/types";
 import { ApiPanel } from "./api-panel";
+import { ArtifactLightbox } from "./artifact-lightbox";
 import { ArtifactThumbnail } from "./artifact-thumbnail";
 import { ProgressRing } from "./progress-ring";
-import { MESH_STAGES } from "./artifacts";
+import { MESH_STAGES, meshArtifacts, type MeshArtifact } from "./artifacts";
 import { backpressure, rowPresentation, stageDisplayName, type RowPresentation } from "./stage-meta";
 import { StageFailure } from "./stage-failure";
 import { usePipeline } from "./use-pipeline";
@@ -46,6 +47,7 @@ function StageRow({
   index,
   compact = false,
   override,
+  onEnlarge,
 }: {
   run: PipelineRun;
   state: StageState;
@@ -53,11 +55,15 @@ function StageRow({
   compact?: boolean;
   /** US-06: run-level backpressure (backoff / queue-full) lands on the active row only. */
   override?: RowPresentation | undefined;
+  /** US-08: open the lightbox on this stage's artifact. Absent when it has none. */
+  onEnlarge?: ((stage: StageId) => void) | undefined;
 }) {
   const { kind, meta } = override ?? rowPresentation(state);
   const name = stageDisplayName(state.stage);
   // US-04: every row expands to the API call that produced it.
   const [expanded, setExpanded] = useState(false);
+  const hasArtifact =
+    kind === "succeeded" && MESH_STAGES.includes(state.stage) && state.modelUrl !== null;
 
   return (
     <li
@@ -66,68 +72,90 @@ function StageRow({
       style={staggerStyle(index)}
       className={`flex flex-col gap-1 ${ROW_ENTRANCE}`}
     >
-      <button
-        type="button"
-        data-testid={`stage-toggle-${state.stage}`}
-        aria-expanded={expanded}
-        aria-controls={`api-panel-${state.stage}`}
-        onClick={() => setExpanded((open) => !open)}
-        className={`flex w-full items-center gap-3 rounded-sm text-left hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:bg-elevated disabled:cursor-not-allowed disabled:opacity-40 ${compact ? "min-h-5" : "min-h-6"}`}
-      >
-        <ProgressRing kind={kind} progress={state.progress} compact={compact} />
-        <span
-          className={`font-mono text-xs uppercase tracking-caps ${
-            kind === "pending" ? "text-muted" : kind === "running" ? "text-accent" : "text-foreground"
-          }`}
+      {/* US-08: the enlarge control is a SIBLING of the row toggle, layered
+          over the thumbnail slot. The row is already a button (US-04) and a
+          nested button is invalid HTML; this keeps the rail's visual layout
+          and the caret's hit area exactly as they were. */}
+      <div className="relative flex items-center">
+        <button
+          type="button"
+          data-testid={`stage-toggle-${state.stage}`}
+          aria-expanded={expanded}
+          aria-controls={`api-panel-${state.stage}`}
+          onClick={() => setExpanded((open) => !open)}
+          className={`flex w-full items-center gap-3 rounded-sm text-left hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:bg-elevated disabled:cursor-not-allowed disabled:opacity-40 ${compact ? "min-h-5" : "min-h-6"}`}
         >
-          {name}
-        </span>
-        {/* Screen readers + the US-03a resume spec both read the state word;
-            failed rows say it in the visible meta, and the backpressure kinds
-            already read well from their visible copy — no slug announcements. */}
-        {kind !== "failed" && kind !== "backoff" && kind !== "queue-full" && (
-          <span className="sr-only">{kind}</span>
-        )}
-        <span className="flex-1" aria-hidden />
-        {meta !== "" && (
+          <ProgressRing kind={kind} progress={state.progress} compact={compact} />
           <span
-            className={`text-right font-mono text-xs tabular-nums ${
-              kind === "failed"
-                ? "text-error"
-                : kind === "backoff" || kind === "queue-full"
-                  ? "text-warning"
-                  : kind === "succeeded"
-                    ? "text-muted"
-                    : "text-foreground"
+            className={`font-mono text-xs uppercase tracking-caps ${
+              kind === "pending" ? "text-muted" : kind === "running" ? "text-accent" : "text-foreground"
             }`}
           >
-            {meta}
+            {name}
           </span>
-        )}
-        {kind === "succeeded" && MESH_STAGES.includes(state.stage) && state.modelUrl !== null && (
-          // Thumbnail PNG renders directly (<img> needs no CORS); the GLB
-          // fallback goes through the proxy — state holds raw signed URLs.
-          <ArtifactThumbnail
-            url={proxiedAssetUrl(state.modelUrl)}
-            thumbnailUrl={state.thumbnailUrl ?? null}
-            label={state.stage}
+          {/* Screen readers + the US-03a resume spec both read the state word;
+              failed rows say it in the visible meta, and the backpressure kinds
+              already read well from their visible copy — no slug announcements. */}
+          {kind !== "failed" && kind !== "backoff" && kind !== "queue-full" && (
+            <span className="sr-only">{kind}</span>
+          )}
+          <span className="flex-1" aria-hidden />
+          {meta !== "" && (
+            <span
+              className={`text-right font-mono text-xs tabular-nums ${
+                kind === "failed"
+                  ? "text-error"
+                  : kind === "backoff" || kind === "queue-full"
+                    ? "text-warning"
+                    : kind === "succeeded"
+                      ? "text-muted"
+                      : "text-foreground"
+              }`}
+            >
+              {meta}
+            </span>
+          )}
+          {hasArtifact && state.modelUrl !== null && (
+            // Thumbnail PNG renders directly (<img> needs no CORS); the GLB
+            // fallback goes through the proxy — state holds raw signed URLs.
+            // (hasArtifact already guarantees this; repeated so TS narrows.)
+            <ArtifactThumbnail
+              url={proxiedAssetUrl(state.modelUrl)}
+              thumbnailUrl={state.thumbnailUrl ?? null}
+              label={state.stage}
+            />
+          )}
+          {/* Caret — the only affordance hint; rotates open, transform-only. */}
+          <svg
+            viewBox="0 0 8 8"
+            aria-hidden
+            className={`size-2 shrink-0 stroke-muted transition-transform duration-(--duration-fast) ease-(--ease-stage) motion-reduce:transition-none ${
+              expanded ? "rotate-90" : ""
+            }`}
+            fill="none"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 1.5L5.5 4 3 6.5" />
+          </svg>
+        </button>
+
+        {hasArtifact && onEnlarge !== undefined && (
+          <button
+            type="button"
+            data-testid={`enlarge-${state.stage}`}
+            aria-label={`Enlarge ${name} mesh`}
+            onClick={() => {
+              onEnlarge(state.stage);
+            }}
+            // right-5 = the caret (size-2 = 8px) plus the gap-3 (12px) that
+            // precedes it, so this lands exactly on the 32px thumbnail slot.
+            // tests/stage-rail.spec.ts asserts the overlap geometrically.
+            className="absolute right-5 size-8 cursor-zoom-in rounded-sm border border-transparent transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent motion-reduce:transition-none"
           />
         )}
-        {/* Caret — the only affordance hint; rotates open, transform-only. */}
-        <svg
-          viewBox="0 0 8 8"
-          aria-hidden
-          className={`size-2 shrink-0 stroke-muted transition-transform duration-(--duration-fast) ease-(--ease-stage) motion-reduce:transition-none ${
-            expanded ? "rotate-90" : ""
-          }`}
-          fill="none"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M3 1.5L5.5 4 3 6.5" />
-        </svg>
-      </button>
+      </div>
 
       {expanded && <ApiPanel run={run} stage={state.stage} />}
 
@@ -138,9 +166,15 @@ function StageRow({
 
 export function StageRail() {
   const run = usePipeline((state) => state.run);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
   if (run === null) return null;
   // US-06: at most one row carries the run-level 429 overlay.
   const pressure = backpressure(run);
+  const artifacts: MeshArtifact[] = meshArtifacts(run);
+  const enlarge = (stage: StageId): void => {
+    const index = artifacts.findIndex((artifact) => artifact.stage === stage);
+    if (index !== -1) setOpenIndex(index);
+  };
 
   return (
     <div
@@ -158,6 +192,7 @@ export function StageRail() {
             state={run.stages[stage]}
             index={index}
             override={pressure?.stage === stage ? pressure.presentation : undefined}
+            onEnlarge={enlarge}
           />
         ))}
       </ol>
@@ -183,10 +218,21 @@ export function StageRail() {
               override={
                 pressure?.stage === `animate:${clip}` ? pressure.presentation : undefined
               }
+              onEnlarge={enlarge}
             />
           ))}
         </ol>
       </section>
+
+      {openIndex !== null && (
+        <ArtifactLightbox
+          artifacts={artifacts}
+          initialIndex={openIndex}
+          onClose={() => {
+            setOpenIndex(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,161 @@
+"use client";
+
+/**
+ * US-08: the artifact lightbox. The rail's thumbnail is 32px — a status dot,
+ * not a preview. This opens the same artifact at up to 640px so a visitor can
+ * actually read pose, symmetry, and texture.
+ *
+ * Portals to document.body: the rail is `overflow-y-auto` on desktop and a
+ * `max-h-[60dvh]` bottom sheet on mobile, so an in-tree dialog would be
+ * clipped by its own scroll container.
+ *
+ * The dialog owns its step index. StageRail mounts it only while open, so the
+ * initialIndex prop is read once per open and no callback identity has to be
+ * stable across renders.
+ *
+ * Hand-rolled focus trap — no new packages (CLAUDE.md). DESIGN.md forbids
+ * backdrop-blur and shadows: the scrim is a flat tint, depth is the elevated
+ * surface plus a border.
+ */
+
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { MeshArtifact } from "./artifacts";
+import { snapshotGlb } from "./artifact-thumbnail";
+
+export interface ArtifactLightboxProps {
+  /** Every landed mesh artifact, in pipeline order. */
+  artifacts: MeshArtifact[];
+  /** Which one the visitor clicked. */
+  initialIndex: number;
+  onClose: () => void;
+}
+
+export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactLightboxProps) {
+  const [index, setIndex] = useState(initialIndex);
+  const [fallback, setFallback] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const artifact = artifacts[index];
+
+  // No pre-rendered PNG (legacy run, or a task Meshy never rendered): take a
+  // one-shot 512px snapshot through the shared offscreen renderer — the same
+  // path and the same serialized queue the rail uses. Null whenever a real
+  // PNG exists or the index is out of range, which is also the effect's guard.
+  const snapshotSource =
+    artifact !== undefined && artifact.imageUrl === null ? artifact.modelUrl : null;
+
+  useEffect(() => {
+    if (snapshotSource === null) return;
+    let cancelled = false;
+    void snapshotGlb(snapshotSource)
+      .then((dataUrl) => {
+        if (!cancelled) setFallback(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFallback(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshotSource]);
+
+  useEffect(() => {
+    const node = dialogRef.current;
+    if (node === null) return;
+    // Restore focus to whatever opened us — the thumbnail's enlarge button.
+    const opener = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || node === null) return;
+      const focusables = node.querySelectorAll<HTMLElement>("button:not([disabled])");
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus();
+    };
+  }, [onClose]);
+
+  // Every hook above runs unconditionally — React requires stable hook order,
+  // so this guard cannot move up.
+  if (artifact === undefined) return null;
+  const caption = `${artifact.label} · ${artifact.meta}`;
+  const shown = artifact.imageUrl ?? fallback;
+
+  return createPortal(
+    <div
+      data-testid="lightbox-scrim"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
+    >
+      <div
+        ref={dialogRef}
+        data-testid="artifact-lightbox"
+        role="dialog"
+        aria-modal="true"
+        aria-label={caption}
+        // The frame is inside the scrim, so its own clicks must not dismiss.
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+        className="flex w-full max-w-[min(80vw,640px)] flex-col gap-3 transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
+      >
+        {/* The box is reserved up front and pulses while the snapshot renders,
+            so the caption never jumps under the pointer. */}
+        <span
+          className={`relative block aspect-square w-full overflow-hidden rounded-md border border-border bg-elevated ${
+            shown === null ? "animate-pulse motion-reduce:animate-none" : ""
+          }`}
+        >
+          {shown !== null && (
+            /* eslint-disable-next-line @next/next/no-img-element -- signed Meshy PNG or an inline data URL; next/image optimizes neither */
+            <img
+              key={artifact.stage}
+              data-testid="lightbox-image"
+              src={shown}
+              alt={`${artifact.label} stage mesh, enlarged`}
+              draggable={false}
+              className="size-full object-contain transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
+            />
+          )}
+        </span>
+
+        <div className="flex items-center justify-between gap-3">
+          <span
+            data-testid="lightbox-caption"
+            className="font-mono text-xs uppercase tracking-caps text-muted"
+          >
+            {caption}
+          </span>
+          <button
+            ref={closeRef}
+            type="button"
+            data-testid="lightbox-close"
+            onClick={onClose}
+            className="rounded-sm border border-border px-2 py-1 font-mono text-xs uppercase tracking-caps text-muted transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent motion-reduce:transition-none"
+          >
+            esc
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}

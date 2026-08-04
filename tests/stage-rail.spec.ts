@@ -29,6 +29,7 @@ interface FixtureStage {
   precedingTasks: number | null;
   creditCost: number | null;
   modelUrl: string | null;
+  thumbnailUrl: string | null;
   startedAt: number | null;
   completedAt: number | null;
   error: string | null;
@@ -50,6 +51,7 @@ function makeRun(
         precedingTasks: null,
         creditCost: null,
         modelUrl: null,
+        thumbnailUrl: null,
         startedAt: null,
         completedAt: null,
         error: null,
@@ -79,12 +81,17 @@ async function seedRun(page: Page, run: ReturnType<typeof makeRun>): Promise<voi
   );
 }
 
+/** 8×8 solid PNG, inline: the rail's <img> path with zero network dependency. */
+const FIXTURE_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGO48kIbK2IYWhIAvMl5wfWTQdgAAAAASUVORK5CYII=";
+
 const succeededStage = (id: string, credits: number, offset: number): Partial<FixtureStage> => ({
   status: "succeeded",
   taskId: id,
   progress: 100,
   creditCost: credits,
   modelUrl: `https://assets.meshy.test/${id}.glb`,
+  thumbnailUrl: FIXTURE_PNG,
   startedAt: Date.now() - 300_000 + offset,
   completedAt: Date.now() - 300_000 + offset + 82_000,
 });
@@ -190,4 +197,89 @@ test("reduced motion: rail renders all states with animations stripped (snapshot
   await page
     .getByTestId("stage-list")
     .screenshot({ path: "test-results/stage-rail-reduced-motion.png" });
+});
+
+// US-08: the 32px thumbnail is a status dot, not a preview. Clicking it opens
+// the artifact at up to 640px without disturbing the row's API panel.
+
+test("enlarge: thumbnail opens the lightbox, Esc closes it and restores focus", async ({
+  page,
+}) => {
+  await seedRun(
+    page,
+    makeRun("running", {
+      preview: succeededStage("preview-0001", 20, 0),
+    }),
+  );
+  await page.goto("/");
+
+  const enlarge = page.getByTestId("enlarge-preview");
+  await expect(enlarge).toHaveAttribute("aria-label", "Enlarge preview mesh");
+
+  // The overlay button sits on top of the thumbnail slot, not beside it.
+  const buttonBox = await enlarge.boundingBox();
+  const thumbBox = await page.getByTestId("artifact-thumb-preview").boundingBox();
+  expect(buttonBox).not.toBeNull();
+  expect(thumbBox).not.toBeNull();
+  expect(Math.abs(buttonBox!.x - thumbBox!.x)).toBeLessThan(4);
+  expect(Math.abs(buttonBox!.y - thumbBox!.y)).toBeLessThan(4);
+
+  await enlarge.click();
+
+  const dialog = page.getByTestId("artifact-lightbox");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("role", "dialog");
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(page.getByTestId("lightbox-caption")).toHaveText("preview · 20c · 1:22");
+  await expect(page.getByTestId("lightbox-image")).toBeVisible();
+
+  // Enlarging must not toggle the row's API panel (US-04 owns that click).
+  await expect(page.getByTestId("api-panel-preview")).toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  // Tab order within a row is toggle → enlarge (spec requirement 6).
+  await page.getByTestId("stage-toggle-preview").focus();
+  await page.keyboard.press("Tab");
+  await expect(enlarge).toBeFocused();
+  // Re-open from the keyboard so the focus-restore assertion below is honest.
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeVisible();
+
+  // Closing returns focus to the control that opened it, not to the top of
+  // the page — the whole point of tracking the opener.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(enlarge).toBeFocused();
+});
+
+test("enlarge: scrim click and close button both dismiss", async ({ page }) => {
+  await seedRun(page, makeRun("running", { preview: succeededStage("preview-0001", 20, 0) }));
+  await page.goto("/");
+
+  await page.getByTestId("enlarge-preview").click();
+  await page.getByTestId("lightbox-close").click();
+  await expect(page.getByTestId("artifact-lightbox")).toHaveCount(0);
+
+  await page.getByTestId("enlarge-preview").click();
+  // Click the scrim well away from the frame.
+  await page.getByTestId("lightbox-scrim").click({ position: { x: 5, y: 5 } });
+  await expect(page.getByTestId("artifact-lightbox")).toHaveCount(0);
+});
+
+test("enlarge: no affordance on stages without a mesh artifact", async ({ page }) => {
+  await seedRun(
+    page,
+    makeRun("running", {
+      preview: succeededStage("preview-0001", 20, 0),
+      rig: succeededStage("rigging-0004", 5, 180_000),
+    }),
+  );
+  await page.goto("/");
+
+  await expect(page.getByTestId("enlarge-preview")).toHaveCount(1);
+  // rig succeeded but is iconographic — nothing to enlarge.
+  await expect(page.getByTestId("enlarge-rig")).toHaveCount(0);
+  await expect(page.getByTestId("enlarge-refine")).toHaveCount(0);
 });
