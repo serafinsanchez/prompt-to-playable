@@ -13,7 +13,6 @@ import type { PipelineRun, StageId } from "../../lib/meshy/types";
 import {
   creditCopy,
   MASKED_KEY_HEADER,
-  PROXY_CAPTION,
   stageCurl,
   stageRequest,
 } from "./api-descriptor";
@@ -87,7 +86,6 @@ export function ApiPanel({ run, stage }: { run: PipelineRun; stage: StageId }) {
         </span>
       </div>
 
-      <p className="text-muted">{PROXY_CAPTION}</p>
     </div>
   );
 }

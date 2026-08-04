@@ -36,10 +36,6 @@ export const MASKED_KEY_HEADER = "x-meshy-key: •••";
 /** The real Meshy host, for the copyable curl. The app itself always calls the proxy. */
 export const MESHY_HOST = "https://api.meshy.ai";
 
-/** One line of honesty about the passthrough (shown once per panel). */
-export const PROXY_CAPTION =
-  "sent via the app's passthrough proxy — same path, key becomes a header server-side.";
-
 export interface StageRequest {
   method: "POST";
   /** Real Meshy path (also the proxy-relative path under /api/meshy). */
