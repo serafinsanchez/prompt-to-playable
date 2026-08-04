@@ -99,3 +99,16 @@ test("a broken manifest degrades to an inline error, not a crash", async ({ page
   });
   expect(errors).toEqual([]);
 });
+
+test("game-ready character.glb downloads as one real file", async ({ page }) => {
+  await page.goto("/");
+  // First gallery entry's card on stage → its download disclosure (desktop-only UI).
+  await page.getByTestId("gallery-download-toggle-knight").click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("gallery-download-knight.glb").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("knight.glb");
+  const path = await download.path();
+  const { statSync } = await import("node:fs");
+  expect(statSync(path!).size).toBeGreaterThan(1024 * 1024); // a real merged file, not a stub
+});

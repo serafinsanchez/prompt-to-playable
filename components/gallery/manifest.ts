@@ -83,12 +83,22 @@ export function toCharacterSource(entry: GalleryEntry): CharacterSource {
 
 /**
  * Same shape as the live run's downloadPlan (completion.ts), but over the
- * gallery's committed static assets — rig first, then the five clips. The
- * paths are same-origin (/gallery/…), which is what makes the `download`
+ * gallery's committed static assets — the merged game-ready character.glb
+ * first (US-10, when the manifest has it), then rig, then the five clips.
+ * The paths are same-origin (/gallery/…), which is what makes the `download`
  * attribute honored.
  */
 export function galleryDownloadPlan(entry: GalleryEntry): DownloadEntry[] {
-  return [
+  const plan: DownloadEntry[] = [];
+  if (entry.gameReadyPath !== undefined && entry.gameReadySizeBytes !== undefined) {
+    plan.push({
+      label: `game-ready · ${(entry.gameReadySizeBytes / 1024 / 1024).toFixed(1)} MB`,
+      shortName: "character.glb",
+      filename: `${entry.slug}.glb`,
+      url: entry.gameReadyPath,
+    });
+  }
+  plan.push(
     {
       label: "the character",
       shortName: "rig.glb",
@@ -101,7 +111,8 @@ export function galleryDownloadPlan(entry: GalleryEntry): DownloadEntry[] {
       filename: `${entry.slug}-${clip}.glb`,
       url: entry.clipPaths[clip],
     })),
-  ];
+  );
+  return plan;
 }
 
 /** "55 credits. About 7 minutes." — numbers are copy (DESIGN.md voice). */
