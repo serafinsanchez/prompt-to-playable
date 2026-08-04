@@ -59,7 +59,7 @@ export function KeyEntry() {
         )}
       </div>
 
-      {keyError !== null ? (
+      {keyError !== null && (
         <p
           id={`${inputId}-error`}
           data-testid="key-error"
@@ -67,10 +67,6 @@ export function KeyEntry() {
           className="font-mono text-xs text-error"
         >
           {keyError}
-        </p>
-      ) : (
-        <p className="font-mono text-xs text-muted">
-          Stays in this tab. Sent as x-meshy-key, never stored.
         </p>
       )}
     </div>
