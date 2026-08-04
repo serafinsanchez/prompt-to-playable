@@ -6,11 +6,19 @@ import {
   BALANCE_PATH,
   createMeshyClient,
   PREVIEW_POSE_MODE,
+  PREVIEW_SHOULD_REMESH,
+  PREVIEW_TARGET_POLYCOUNT,
   PREVIEW_TOPOLOGY,
-  REFINE_TEXTURE_PROMPT,
+  buildRefineTexturePrompt,
+  REFINE_TEXTURE_STEER,
+  REFINE_TEXTURE_RESOLUTION,
+  REFINE_REMOVE_LIGHTING,
   REMESH_PATH,
+  REMESH_TOPOLOGY,
+  RIG_HEIGHT_METERS,
   RIGGING_PATH,
   taskGlbUrl,
+  TEXT_TO_3D_AI_MODEL,
   TEXT_TO_3D_PATH,
 } from "../client";
 import { MeshyApiError } from "../types";
@@ -37,9 +45,15 @@ describe("createMeshyClient", () => {
       prompt: "a brave knight",
       pose_mode: PREVIEW_POSE_MODE,
       topology: PREVIEW_TOPOLOGY,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      should_remesh: PREVIEW_SHOULD_REMESH,
+      target_polycount: PREVIEW_TARGET_POLYCOUNT,
     });
     expect(PREVIEW_POSE_MODE).toBe("a-pose");
     expect(PREVIEW_TOPOLOGY).toBe("quad");
+    expect(TEXT_TO_3D_AI_MODEL).toBe("meshy-6");
+    expect(PREVIEW_SHOULD_REMESH).toBe(true);
+    expect(PREVIEW_TARGET_POLYCOUNT).toBe(30_000);
   });
 
   it("createRefineTask chains by preview_task_id with PBR and anti-lettering texture steer", async () => {
@@ -48,17 +62,22 @@ describe("createMeshyClient", () => {
     });
     const client = createMeshyClient(transport);
 
-    const taskId = await client.createRefineTask("preview-0001");
+    const taskId = await client.createRefineTask("preview-0001", "a brave knight");
 
     expect(taskId).toBe("refine-0002");
     expect(calls[0]!.body).toEqual({
       mode: "refine",
       preview_task_id: "preview-0001",
       enable_pbr: true,
-      texture_prompt: REFINE_TEXTURE_PROMPT,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      texture_resolution: REFINE_TEXTURE_RESOLUTION,
+      remove_lighting: REFINE_REMOVE_LIGHTING,
+      texture_prompt: buildRefineTexturePrompt("a brave knight"),
     });
     // Generative texturing can't spell — steer it away from lettering.
-    expect(REFINE_TEXTURE_PROMPT).toMatch(/no text/);
+    expect(REFINE_TEXTURE_STEER).toMatch(/no text/);
+    expect(REFINE_TEXTURE_RESOLUTION).toBe("4k");
+    expect(REFINE_REMOVE_LIGHTING).toBe(true);
   });
 
   it("getTextTo3DTask GETs the v2 task by id", async () => {
@@ -80,10 +99,10 @@ describe("createMeshyClient", () => {
     });
     const client = createMeshyClient(transport);
 
-    const taskId = await client.createRigTask("refine-0002");
+    const taskId = await client.createRigTask("remesh-0003");
 
     expect(taskId).toBe("rigging-0003");
-    expect(calls[0]!.body).toEqual({ input_task_id: "refine-0002" });
+    expect(calls[0]!.body).toEqual({ input_task_id: "remesh-0003", height_meters: RIG_HEIGHT_METERS });
   });
 
   it("createAnimationTask sends rig_task_id + integer action_id (live v1/animations shape)", async () => {
@@ -104,14 +123,18 @@ describe("createMeshyClient", () => {
 
   it("createRemeshTask passes target_polycount when given", async () => {
     const { transport, calls } = makeFixtureTransport({
-      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0005" } }],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
     });
     const client = createMeshyClient(transport);
 
     const taskId = await client.createRemeshTask("refine-0002", 30_000);
 
-    expect(taskId).toBe("remesh-0005");
-    expect(calls[0]!.body).toEqual({ input_task_id: "refine-0002", target_polycount: 30_000 });
+    expect(taskId).toBe("remesh-0003");
+    expect(calls[0]!.body).toEqual({
+      input_task_id: "refine-0002",
+      topology: REMESH_TOPOLOGY,
+      target_polycount: 30_000,
+    });
   });
 
   it("taskGlbUrl reads model_urls.glb for text-to-3d tasks", () => {

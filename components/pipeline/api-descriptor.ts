@@ -16,9 +16,16 @@ import {
   ANIMATIONS_PATH,
   PREVIEW_POSE_MODE,
   PREVIEW_TOPOLOGY,
-  REFINE_TEXTURE_PROMPT,
+  PREVIEW_SHOULD_REMESH,
+  PREVIEW_TARGET_POLYCOUNT,
+  buildRefineTexturePrompt,
+  REFINE_TEXTURE_RESOLUTION,
+  REFINE_REMOVE_LIGHTING,
   REMESH_PATH,
+  REMESH_TOPOLOGY,
+  RIG_HEIGHT_METERS,
   RIGGING_PATH,
+  TEXT_TO_3D_AI_MODEL,
   TEXT_TO_3D_PATH,
 } from "../../lib/meshy/client";
 import {
@@ -62,6 +69,9 @@ export function stageRequest(run: PipelineRun, stage: StageId): StageRequest {
       prompt: run.prompt,
       pose_mode: PREVIEW_POSE_MODE,
       topology: PREVIEW_TOPOLOGY,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      should_remesh: PREVIEW_SHOULD_REMESH,
+      target_polycount: PREVIEW_TARGET_POLYCOUNT,
     });
   }
   if (stage === "refine") {
@@ -69,18 +79,23 @@ export function stageRequest(run: PipelineRun, stage: StageId): StageRequest {
       mode: "refine",
       preview_task_id: taskIdOr(run, "preview", "<preview-task-id>"),
       enable_pbr: true,
-      texture_prompt: REFINE_TEXTURE_PROMPT,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      texture_resolution: REFINE_TEXTURE_RESOLUTION,
+      remove_lighting: REFINE_REMOVE_LIGHTING,
+      texture_prompt: buildRefineTexturePrompt(run.prompt),
     });
   }
   if (stage === "remesh") {
     return request(REMESH_PATH, {
       input_task_id: taskIdOr(run, "refine", "<refine-task-id>"),
+      topology: REMESH_TOPOLOGY,
       target_polycount: REMESH_TARGET_POLYCOUNT,
     });
   }
   if (stage === "rig") {
     return request(RIGGING_PATH, {
       input_task_id: taskIdOr(run, "remesh", "<remesh-task-id>"),
+      height_meters: RIG_HEIGHT_METERS,
     });
   }
   const clip = stage.slice("animate:".length) as AnimationClip;

@@ -6,7 +6,7 @@
  * (`preview_task_id` / `input_task_id`) — never download-and-reupload.
  */
 
-import type { AnimationClip, MeshyTask } from "./types";
+import { REMESH_TARGET_POLYCOUNT, type AnimationClip, type MeshyTask } from "./types";
 import type { MeshyTransport } from "./transport";
 
 export const TEXT_TO_3D_PATH = "/openapi/v2/text-to-3d";
@@ -23,12 +23,39 @@ export const PREVIEW_POSE_MODE = "a-pose";
 export const PREVIEW_TOPOLOGY = "quad";
 
 /**
- * Refine texture steer: generative texturing can't spell, so any prompt that
- * implies logos or jersey lettering comes back as smudged glyphs. Sent on
- * every refine alongside the mesh prompt.
+ * Pinned generation model for both preview and refine (docs.meshy.ai
+ * text-to-3d v2). Pinned instead of "latest" so results are reproducible
+ * and the API panel teaches a real choice.
  */
-export const REFINE_TEXTURE_PROMPT =
+export const TEXT_TO_3D_AI_MODEL = "meshy-6";
+/**
+ * meshy-6 defaults should_remesh to FALSE — without forcing it on, the
+ * topology/target_polycount params below are silently ignored and preview
+ * returns raw high-poly triangles.
+ */
+export const PREVIEW_SHOULD_REMESH = true;
+/** Same budget the remesh stage targets — literally shared, not just numerically equal. */
+export const PREVIEW_TARGET_POLYCOUNT = REMESH_TARGET_POLYCOUNT;
+
+/**
+ * Refine texture steer: generative texturing can't spell, so any prompt
+ * that implies logos or jersey lettering comes back as smudged glyphs.
+ * Appended to the user's prompt — never sent alone, or the texture pass
+ * loses the character description entirely.
+ */
+export const REFINE_TEXTURE_STEER =
   "clean fabric and materials, no text, no logos, no lettering";
+/** docs.meshy.ai: base color resolution, default 2k. 4k is the visual ceiling worth paying for. */
+export const REFINE_TEXTURE_RESOLUTION = "4k";
+/** Delit base color (v6 default, sent explicitly) — the R3F scene does its own lighting. */
+export const REFINE_REMOVE_LIGHTING = true;
+
+/** Meshy caps texture_prompt at 600 chars; user prompt leads, steer always survives. */
+const TEXTURE_PROMPT_MAX = 600;
+export function buildRefineTexturePrompt(prompt: string): string {
+  const lead = prompt.slice(0, TEXTURE_PROMPT_MAX - REFINE_TEXTURE_STEER.length - 2).trimEnd();
+  return lead ? `${lead}, ${REFINE_TEXTURE_STEER}` : REFINE_TEXTURE_STEER;
+}
 export const RIGGING_PATH = "/openapi/v1/rigging";
 export const ANIMATIONS_PATH = "/openapi/v1/animations";
 export const REMESH_PATH = "/openapi/v1/remesh";
@@ -49,6 +76,15 @@ export const ANIMATION_CLIP_ACTIONS: Record<AnimationClip, number> = {
 };
 
 /**
+ * Remesh defaults to TRIANGLE topology (docs.meshy.ai) — but this stage's
+ * output is what rigging skins, and quads deform far better under skinning.
+ * Requesting quad on preview alone is not enough; it must be re-asserted here.
+ */
+export const REMESH_TOPOLOGY = "quad";
+/** Explicit humanoid scale for auto-rigging (docs default 1.7m) — deterministic playground scale. */
+export const RIG_HEIGHT_METERS = 1.7;
+
+/**
  * Where a task's GLB lives depends on the endpoint family: text-to-3d (and
  * remesh) publish `model_urls.glb`; rigging and animation nest URLs under
  * `result`. One extractor so the pipeline stays shape-agnostic.
@@ -65,8 +101,8 @@ export function taskGlbUrl(task: MeshyTask): string | null {
 export interface MeshyClient {
   /** POST v2 text-to-3d { mode: "preview" } → task id. */
   createPreviewTask(prompt: string): Promise<string>;
-  /** POST v2 text-to-3d { mode: "refine", preview_task_id } with PBR → task id. */
-  createRefineTask(previewTaskId: string): Promise<string>;
+  /** POST v2 text-to-3d { mode: "refine", preview_task_id } with 4k PBR steered by the run prompt → task id. */
+  createRefineTask(previewTaskId: string, prompt: string): Promise<string>;
   getTextTo3DTask(taskId: string): Promise<MeshyTask>;
   /** POST v1 rigging chained by input_task_id → task id. */
   createRigTask(inputTaskId: string): Promise<string>;
@@ -104,16 +140,23 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
         prompt,
         pose_mode: PREVIEW_POSE_MODE,
         topology: PREVIEW_TOPOLOGY,
+        ai_model: TEXT_TO_3D_AI_MODEL,
+        should_remesh: PREVIEW_SHOULD_REMESH,
+        target_polycount: PREVIEW_TARGET_POLYCOUNT,
       }),
-    createRefineTask: (previewTaskId) =>
+    createRefineTask: (previewTaskId, prompt) =>
       create(TEXT_TO_3D_PATH, {
         mode: "refine",
         preview_task_id: previewTaskId,
         enable_pbr: true,
-        texture_prompt: REFINE_TEXTURE_PROMPT,
+        ai_model: TEXT_TO_3D_AI_MODEL,
+        texture_resolution: REFINE_TEXTURE_RESOLUTION,
+        remove_lighting: REFINE_REMOVE_LIGHTING,
+        texture_prompt: buildRefineTexturePrompt(prompt),
       }),
     getTextTo3DTask: (taskId) => get(TEXT_TO_3D_PATH, taskId),
-    createRigTask: (inputTaskId) => create(RIGGING_PATH, { input_task_id: inputTaskId }),
+    createRigTask: (inputTaskId) =>
+      create(RIGGING_PATH, { input_task_id: inputTaskId, height_meters: RIG_HEIGHT_METERS }),
     getRigTask: (taskId) => get(RIGGING_PATH, taskId),
     createAnimationTask: (rigTaskId, clip) =>
       create(ANIMATIONS_PATH, {
@@ -124,6 +167,7 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
     createRemeshTask: (inputTaskId, targetPolycount) =>
       create(REMESH_PATH, {
         input_task_id: inputTaskId,
+        topology: REMESH_TOPOLOGY,
         ...(targetPolycount !== undefined ? { target_polycount: targetPolycount } : {}),
       }),
     getRemeshTask: (taskId) => get(REMESH_PATH, taskId),

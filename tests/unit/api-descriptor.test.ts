@@ -12,7 +12,15 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createMeshyClient, REMESH_PATH, RIGGING_PATH, ANIMATIONS_PATH, TEXT_TO_3D_PATH } from "../../lib/meshy/client";
+import {
+  createMeshyClient,
+  REMESH_PATH,
+  RIGGING_PATH,
+  ANIMATIONS_PATH,
+  TEXT_TO_3D_PATH,
+  buildRefineTexturePrompt,
+  REFINE_TEXTURE_STEER,
+} from "../../lib/meshy/client";
 import { makeFixtureTransport } from "../../lib/meshy/__tests__/fixtures";
 import { createPipelineStore, KEY_STORAGE_KEY, type TickScheduler } from "../../components/pipeline/store";
 import type { StorageAdapter } from "../../lib/meshy/storage";
@@ -68,7 +76,7 @@ describe("stageRequest ↔ client sync", () => {
     const run = chainedRun();
 
     await client.createPreviewTask(run.prompt);
-    await client.createRefineTask("preview-0001");
+    await client.createRefineTask("preview-0001", run.prompt);
     await client.createRemeshTask("refine-0002", REMESH_TARGET_POLYCOUNT);
     await client.createRigTask("remesh-0003");
     for (const clip of ANIMATION_CLIPS) await client.createAnimationTask("rigging-0004", clip);
@@ -193,5 +201,68 @@ describe("creditCopy", () => {
     // A failed task that DID consume credits never claims auto-refund (US-06).
     run.stages.rig.creditCost = 2;
     expect(creditCopy(run.stages.rig, "rig")).toBe("2 credits consumed — no auto-refund reported");
+  });
+});
+
+describe("stage body parameter pins", () => {
+  // The sync test proves client === panel; these pin the actual values so
+  // both can't drift together. Sources: docs.meshy.ai (fetched 2026-08-04).
+  it("preview requests meshy-6 with an explicit remesh phase (quad, 30k)", () => {
+    const body = stageRequest(chainedRun(), "preview").body;
+    expect(body).toEqual({
+      mode: "preview",
+      prompt: "a bronze knight with a tower shield",
+      pose_mode: "a-pose",
+      topology: "quad",
+      ai_model: "meshy-6",
+      // meshy-6 defaults should_remesh to false, which silently ignores
+      // topology/target_polycount — must be explicit.
+      should_remesh: true,
+      target_polycount: 30_000,
+    });
+  });
+
+  it("refine textures at 4k with the user's prompt leading the steer", () => {
+    const body = stageRequest(chainedRun(), "refine").body;
+    expect(body).toEqual({
+      mode: "refine",
+      preview_task_id: "preview-0001",
+      enable_pbr: true,
+      ai_model: "meshy-6",
+      texture_resolution: "4k",
+      remove_lighting: true,
+      texture_prompt:
+        "a bronze knight with a tower shield, clean fabric and materials, no text, no logos, no lettering",
+    });
+  });
+
+  it("buildRefineTexturePrompt keeps the combined prompt under Meshy's 600-char cap", () => {
+    const long = "x".repeat(700);
+    const combined = buildRefineTexturePrompt(long);
+    expect(combined.length).toBeLessThanOrEqual(600);
+    expect(combined.endsWith(REFINE_TEXTURE_STEER)).toBe(true);
+    expect(combined.startsWith("xxx")).toBe(true);
+    expect(buildRefineTexturePrompt("")).toBe(REFINE_TEXTURE_STEER);
+  });
+
+  it("buildRefineTexturePrompt trims a slice boundary that lands after a space", () => {
+    const combined = buildRefineTexturePrompt("word ".repeat(200));
+    expect(combined.length).toBeLessThanOrEqual(600);
+    expect(combined.includes(" ,")).toBe(false);
+  });
+
+  it("remesh requests quad topology — the docs default is triangle, and this mesh is what gets rigged", () => {
+    expect(stageRequest(chainedRun(), "remesh").body).toEqual({
+      input_task_id: "refine-0002",
+      topology: "quad",
+      target_polycount: REMESH_TARGET_POLYCOUNT,
+    });
+  });
+
+  it("rig pins the humanoid height explicitly", () => {
+    expect(stageRequest(chainedRun(), "rig").body).toEqual({
+      input_task_id: "remesh-0003",
+      height_meters: 1.7,
+    });
   });
 });
