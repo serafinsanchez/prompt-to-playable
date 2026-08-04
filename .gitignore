@@ -24,3 +24,6 @@ public/spike/
 .pregen/
 
 docs/
+
+# SDD scratch (subagent-driven-development ledger/briefs — never commit)
+.superpowers/
