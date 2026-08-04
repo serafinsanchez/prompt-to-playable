@@ -25,13 +25,12 @@ import {
 import { ApiPanel } from "./api-panel";
 import { ArtifactThumbnail } from "./artifact-thumbnail";
 import { ProgressRing } from "./progress-ring";
+import { MESH_STAGES } from "./artifacts";
 import { backpressure, rowPresentation, stageDisplayName, type RowPresentation } from "./stage-meta";
 import { StageFailure } from "./stage-failure";
 import { usePipeline } from "./use-pipeline";
 
 const LINEAR_ROWS: readonly StageId[] = ["preview", "refine", "remesh", "rig"];
-/** Stages whose artifact is a mesh GLB worth previewing inline. */
-const MESH_STAGES: ReadonlySet<StageId> = new Set(["preview", "refine", "remesh"]);
 
 /** Entrance stagger (DESIGN.md: 60ms between rail children). */
 function staggerStyle(index: number): React.CSSProperties {
@@ -105,7 +104,7 @@ function StageRow({
             {meta}
           </span>
         )}
-        {kind === "succeeded" && MESH_STAGES.has(state.stage) && state.modelUrl !== null && (
+        {kind === "succeeded" && MESH_STAGES.includes(state.stage) && state.modelUrl !== null && (
           // Thumbnail PNG renders directly (<img> needs no CORS); the GLB
           // fallback goes through the proxy — state holds raw signed URLs.
           <ArtifactThumbnail
