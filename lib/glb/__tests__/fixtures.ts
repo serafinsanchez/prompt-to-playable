@@ -48,15 +48,32 @@ export function addRotationClip(
   document.createAnimation(name).addSampler(sampler).addChannel(channel);
 }
 
-/** Rig document: skeleton + skinned triangle (+ optional Meshy-style hacks). */
+/**
+ * Rig document: skeleton + skinned triangle (+ optional Meshy-style hacks).
+ *
+ * `armatureRotationDeg`: rest rotation (degrees, about +X) given to the
+ * Armature node — Hips's only ancestor, so this is facing-bake's
+ * `parentQuat`. Real rigs are rarely axis-aligned; tests that only ever use
+ * the default identity rotation can't distinguish a correct parent-space
+ * correction (`parent⁻¹ · yaw · parent`) from a broken one (wrong
+ * multiplication order, or a dropped `.invert()`) — with identity parentQuat
+ * both collapse to the same result.
+ */
 export function makeRigDoc(
-  options: { junkAnimation?: boolean; emissiveHack?: boolean } = {},
+  options: { junkAnimation?: boolean; emissiveHack?: boolean; armatureRotationDeg?: number } = {},
 ): Document {
   const document = new Document();
   const buffer = document.createBuffer();
   const scene = document.createScene("Scene");
 
   const armature = document.createNode("Armature");
+  if (options.armatureRotationDeg) {
+    const q = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0),
+      THREE.MathUtils.degToRad(options.armatureRotationDeg),
+    );
+    armature.setRotation([q.x, q.y, q.z, q.w]);
+  }
   const hips = document.createNode("Hips");
   const spine = document.createNode("Spine");
   armature.addChild(hips);
