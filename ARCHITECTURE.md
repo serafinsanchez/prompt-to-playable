@@ -148,6 +148,13 @@ entry and `scripts/spike/README.md` for evidence.
 
 Append-only. Newest at the top.
 
+### 2026-08-04 — Meshy POST params pinned after docs review
+- **Chose:** preview now sends `ai_model=meshy-6` + `should_remesh=true` (meshy-6 defaults the remesh phase OFF, which silently discarded our quad/polycount request); remesh re-asserts `topology=quad` because its docs default is triangle and remesh output is what gets rigged; refine upgraded to `texture_resolution=4k` with the user prompt prepended to the anti-lettering steer (steer-only `texture_prompt` was dropping the character description). Rig sends `height_meters=1.7` explicitly.
+- **Considered:** leaving preview's remesh phase implicit (rejected — meshy-6's default silently dropped topology/polycount, discovered via docs review not a live failure); leaving refine's `texture_prompt` as the anti-lettering steer only (rejected — drops the character description the visitor typed, PBR texture would ignore prompt intent).
+- **Evidence:** verified against Meshy API docs, not a live run — no credits spent on this pass. API panel (`components/pipeline/api-descriptor.ts`, derive-don't-duplicate from `lib/meshy/client.ts`) mirrors every new param; `tests/api-panel.spec.ts` passes unchanged against the larger bodies; visual check at 1280px/375px shows the panel box holds (no overflow outside its border, copy-curl button stays reachable) — the JSON body itself does not line-wrap (`white-space: pre` + horizontal scroll inside the `<pre>`), so a long `texture_prompt` scrolls rather than wraps, same pre-existing behavior as any other stage.
+- **Deferred:** animation `post_process.extract_armature` noted as a future payload optimization — changes response shape and clip binding, needs its own spike.
+- **Reversibility:** easy (constants in `lib/meshy/client.ts`). — **Related:** 2026-08-03 Rig-first generation defaults entry; MESHY_CLAUDE.md deprecated-params gotcha.
+
 ### 2026-08-03 — Day-0 spike outcome: 5-clip merge holds; remesh stage mandatory
 - **Chose:** keep the 5-clip plan (idle/walk/run/jump/emote as separate Animation tasks, merged client-side) — validated live, no fallback invoked. Insert remesh(30k) between refine and rig permanently. Pipeline = preview → refine → remesh → rig → animate ×5, **55c/character** (was 50).
 - **Evidence:** one knight end-to-end; rig first-try success; all 5 clips bind to the rig skeleton with zero missing track targets and play via one AnimationMixer in `/spike` (`scripts/spike/README.md`).
