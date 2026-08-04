@@ -21,7 +21,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Prompt to Playable",
+  title: "First Playable",
   description:
     "Type a character. Play it. A text prompt becomes a playable game character via the Meshy API.",
 };
