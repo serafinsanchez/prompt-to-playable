@@ -36,7 +36,7 @@ interface FixtureStage {
 }
 
 function makeRun(
-  status: "running" | "succeeded" | "failed",
+  status: "running" | "awaiting-review" | "succeeded" | "failed",
   overrides: Partial<Record<StageId, Partial<FixtureStage>>>,
 ) {
   const base = Date.now() - 300_000;
@@ -64,7 +64,7 @@ function makeRun(
     status,
     stages,
     startedAt: base,
-    completedAt: status === "running" ? null : base + 240_000,
+    completedAt: status === "running" || status === "awaiting-review" ? null : base + 240_000,
     creditsSpent: 30,
     waitingForQueue: false,
     rateLimitBackoffMs: null,
@@ -340,4 +340,23 @@ test("enlarge: a lone artifact has no live arrows", async ({ page }) => {
   await expect(page.getByTestId("lightbox-prev")).toBeDisabled();
   await expect(page.getByTestId("lightbox-next")).toBeDisabled();
   await expect(page.getByTestId("lightbox-dots").locator("[data-dot]")).toHaveCount(1);
+});
+
+test("preview gate: the review image opens the lightbox", async ({ page }) => {
+  await seedRun(page, makeRun("awaiting-review", { preview: succeededStage("preview-0001", 20, 0) }));
+  await page.goto("/");
+
+  await expect(page.getByTestId("preview-gate")).toBeVisible();
+  const enlarge = page.getByTestId("gate-enlarge");
+  await expect(enlarge).toHaveAttribute("aria-label", "Enlarge preview mesh");
+
+  await enlarge.click();
+  await expect(page.getByTestId("artifact-lightbox")).toBeVisible();
+  await expect(page.getByTestId("lightbox-caption")).toHaveText("preview · 20c · 1:22");
+  // Only the preview has landed at the gate — nothing to step to.
+  await expect(page.getByTestId("lightbox-next")).toBeDisabled();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("artifact-lightbox")).toHaveCount(0);
+  await expect(enlarge).toBeFocused();
 });

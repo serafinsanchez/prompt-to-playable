@@ -11,6 +11,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "../scene/use-prefers-reduced-motion";
+import { meshArtifacts } from "./artifacts";
+import { ArtifactLightbox } from "./artifact-lightbox";
 import { usePipeline } from "./use-pipeline";
 
 export function PreviewGate() {
@@ -20,6 +22,7 @@ export function PreviewGate() {
   const approve = usePipeline((state) => state.approvePreview);
   const reroll = usePipeline((state) => state.rerollPreview);
   const [thumbState, setThumbState] = useState<"loading" | "loaded" | "failed">("loading");
+  const [enlarged, setEnlarged] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -61,8 +64,14 @@ export function PreviewGate() {
           clips in (the 220ms completion beat). Signed URLs die in ~3 days —
           a dead image collapses the box; the rail's thumbnail still works. */}
       {thumbnail !== null && thumbState !== "failed" && (
-        <span
-          className={`block aspect-square w-full overflow-hidden rounded-sm border border-border bg-background ${
+        <button
+          type="button"
+          data-testid="gate-enlarge"
+          aria-label="Enlarge preview mesh"
+          onClick={() => {
+            setEnlarged(true);
+          }}
+          className={`block aspect-square w-full cursor-zoom-in overflow-hidden rounded-sm border border-border bg-background transition-colors duration-(--duration-fast) ease-(--ease-stage) hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent motion-reduce:transition-none ${
             thumbState === "loading" ? "animate-pulse motion-reduce:animate-none" : ""
           }`}
         >
@@ -79,7 +88,17 @@ export function PreviewGate() {
                 : "hidden"
             }
           />
-        </span>
+        </button>
+      )}
+
+      {enlarged && (
+        <ArtifactLightbox
+          artifacts={meshArtifacts(run)}
+          initialIndex={0}
+          onClose={() => {
+            setEnlarged(false);
+          }}
+        />
       )}
 
       <p className="font-mono text-xs text-muted">35 credits ride on this mesh.</p>
