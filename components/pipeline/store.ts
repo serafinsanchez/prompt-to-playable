@@ -18,6 +18,7 @@ import type { MeshyClient } from "../../lib/meshy/client";
 import {
   createPipeline,
   POLL_INTERVAL_MS,
+  retryFailedStage,
   type Clock,
   type Pipeline,
 } from "../../lib/meshy/pipeline";
@@ -70,6 +71,8 @@ export interface PipelineStoreState {
   /** On mount: restore key + run; a non-terminal run resumes and keeps ticking. */
   hydrate(): void;
   start(prompt: string): void;
+  /** User-clicked retry of the failed stage (US-06): reuses upstream task ids, re-spends only that stage. */
+  retry(): void;
   /** Terminal affordance: clearRun + reset to the idle prompt state. */
   startOver(): void;
   /** Unmount cleanup — interval off; a later hydrate() resumes it. */
@@ -198,6 +201,20 @@ export function createPipelineStore(
         const { apiKey, run } = get();
         if (apiKey === "" || run?.status === "running" || prompt.trim() === "") return;
         attach().start(prompt.trim()); // emit → subscriber saves + mirrors
+        startTicking();
+      },
+
+      retry: () => {
+        const { run, apiKey, keyError } = get();
+        // keyError guard mirrors resumeTicker(): a rejected key means every
+        // poll would 401 — fix the key first.
+        if (run?.status !== "failed" || apiKey === "" || keyError !== null) return;
+        const revived = retryFailedStage(run);
+        attach(revived);
+        // Mirror + persist the revived snapshot synchronously so the rail
+        // flips out of "failed" on the click, not on the first poll.
+        saveRun(runStorage, revived);
+        set({ run: revived, tickError: null });
         startTicking();
       },
 

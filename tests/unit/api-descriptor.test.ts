@@ -189,5 +189,9 @@ describe("creditCopy", () => {
     run.stages.rig.status = "failed";
     run.stages.rig.creditCost = 0;
     expect(creditCopy(run.stages.rig, "rig")).toBe("0 credits — failed tasks auto-refund");
+
+    // A failed task that DID consume credits never claims auto-refund (US-06).
+    run.stages.rig.creditCost = 2;
+    expect(creditCopy(run.stages.rig, "rig")).toBe("2 credits consumed — no auto-refund reported");
   });
 });

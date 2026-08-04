@@ -1,10 +1,11 @@
 /**
- * Stage status ring (US-03b). One SVG, five visual kinds — each kind gets a
- * distinct GLYPH, not just a color (a11y: state never reads by color alone):
- * pending = hollow, queued = queue bars, running = progress arc, succeeded =
- * tick, failed = cross. The accent + soft glow appear ONLY on the running
- * ring (DESIGN.md's single allowed glow). The tick lands with a 220ms
- * scale/opacity entrance — the structural half of the P2 signature moment.
+ * Stage status ring (US-03b, US-06). One SVG, seven visual kinds — each kind
+ * gets a distinct GLYPH, not just a color (a11y: state never reads by color
+ * alone): pending = hollow, queued = queue bars, running = progress arc,
+ * succeeded = tick, failed = cross, backoff = pause bars, queue-full = dots.
+ * The accent + soft glow appear ONLY on the running ring (DESIGN.md's single
+ * allowed glow). The tick lands with a 220ms scale/opacity entrance — the
+ * structural half of the P2 signature moment.
  */
 
 import type { RowKind } from "./stage-meta";
@@ -26,6 +27,8 @@ export function ProgressRing({ kind, progress, compact = false }: ProgressRingPr
     running: "stroke-accent",
     succeeded: "stroke-success",
     failed: "stroke-error",
+    backoff: "stroke-warning",
+    "queue-full": "stroke-warning",
   }[kind];
 
   return (
@@ -39,7 +42,7 @@ export function ProgressRing({ kind, progress, compact = false }: ProgressRingPr
         kind === "running" && !compact
           ? "[filter:drop-shadow(0_0_5px_color-mix(in_oklch,var(--color-accent)_50%,transparent))]"
           : ""
-      } ${kind === "queued" ? "animate-pulse motion-reduce:animate-none" : ""}`}
+      } ${kind === "queued" || kind === "queue-full" ? "animate-pulse motion-reduce:animate-none" : ""}`}
     >
       {/* Track — every kind keeps the circle so rows stay aligned. */}
       <circle
@@ -90,6 +93,23 @@ export function ProgressRing({ kind, progress, compact = false }: ProgressRingPr
         <g strokeWidth="2" strokeLinecap="round" className={stroke}>
           <line x1="7.5" y1="7.5" x2="12.5" y2="12.5" />
           <line x1="12.5" y1="7.5" x2="7.5" y2="12.5" />
+        </g>
+      )}
+
+      {kind === "backoff" && (
+        // Pause bars: deliberately holding still, will resume itself.
+        <g strokeWidth="2" strokeLinecap="round" className={stroke}>
+          <line x1="8.25" y1="7" x2="8.25" y2="13" />
+          <line x1="11.75" y1="7" x2="11.75" y2="13" />
+        </g>
+      )}
+
+      {kind === "queue-full" && (
+        // Waiting dots: a slot has to free up before the task even exists.
+        <g className={`${stroke} fill-warning`} strokeWidth="0">
+          <circle cx="6.5" cy="10" r="1" />
+          <circle cx="10" cy="10" r="1" />
+          <circle cx="13.5" cy="10" r="1" />
         </g>
       )}
     </svg>

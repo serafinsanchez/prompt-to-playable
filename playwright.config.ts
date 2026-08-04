@@ -12,6 +12,7 @@ export default defineConfig({
     "controller.spec.ts",
     "pipeline.spec.ts",
     "stage-rail.spec.ts",
+    "failure-states.spec.ts",
     "api-panel.spec.ts",
     "gallery.spec.ts",
     "completion.spec.ts",

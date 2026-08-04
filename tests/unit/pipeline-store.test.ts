@@ -343,6 +343,95 @@ describe("resume from storage", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Retry (US-06)
+// ---------------------------------------------------------------------------
+
+describe("retry", () => {
+  /** Table that fails at rig; retry fixtures re-create rig and finish the run. */
+  function rigFailsThenRecovers(): FixtureTable {
+    return {
+      ...happyTable(),
+      [`POST ${RIGGING_PATH}`]: [
+        { body: { result: "rigging-0003" } },
+        { body: { result: "rigging-0004" } },
+      ],
+      [`GET ${RIGGING_PATH}/:id`]: [
+        { body: task("rigging-0003", "FAILED", { consumed_credits: 0, task_error: { message: "422 Pose estimation failed" } }) },
+        { body: rigSucceeded("rigging-0004", 5) },
+      ],
+    };
+  }
+
+  async function driveToFailedRig(harness: ReturnType<typeof storeWith>): Promise<void> {
+    harness.store.getState().setKey("msy_test_key");
+    harness.store.getState().start("an amorphous blob");
+    await drain();
+    for (let i = 0; i < 8 && harness.store.getState().run?.status === "running"; i += 1) {
+      await harness.advance(POLL_INTERVAL_MS);
+    }
+    if (harness.store.getState().run?.status !== "failed") throw new Error("seed did not fail at rig");
+  }
+
+  it("revives the failed run, re-creates only the failed stage, and finishes", async () => {
+    const harness = storeWith(rigFailsThenRecovers());
+    await driveToFailedRig(harness);
+    const { store, calls, advance } = harness;
+    expect(store.getState().ticking).toBe(false);
+    const upstreamCreates = calls.filter(
+      (c) => c.key === `POST ${TEXT_TO_3D_PATH}` || c.key === `POST ${REMESH_PATH}`,
+    ).length;
+
+    store.getState().retry();
+    // The revived snapshot lands synchronously — the rail flips before any poll.
+    expect(store.getState().run?.status).toBe("running");
+    expect(store.getState().run?.stages.rig.status).toBe("pending");
+    expect(store.getState().ticking).toBe(true);
+    await drain(); // immediate first tick re-creates the rig task
+
+    const rigCreates = calls.filter((c) => c.key === `POST ${RIGGING_PATH}`);
+    expect(rigCreates).toHaveLength(2);
+    expect(JSON.stringify(rigCreates[1]!.body)).toContain('"input_task_id":"remesh-0003"');
+    // No upstream stage was re-created — retry re-spends only the rig.
+    expect(
+      calls.filter((c) => c.key === `POST ${TEXT_TO_3D_PATH}` || c.key === `POST ${REMESH_PATH}`),
+    ).toHaveLength(upstreamCreates);
+
+    for (let i = 0; i < 6 && store.getState().run?.status === "running"; i += 1) {
+      await advance(POLL_INTERVAL_MS);
+    }
+    expect(store.getState().run?.status).toBe("succeeded");
+    expect(store.getState().run?.creditsSpent).toBe(55);
+  });
+
+  it("persists the revived run so a refresh resumes the retry, not the failure", async () => {
+    const harness = storeWith(rigFailsThenRecovers());
+    await driveToFailedRig(harness);
+
+    harness.store.getState().retry();
+    await drain();
+
+    expect(loadRun(harness.runStorage)?.status).toBe("running");
+  });
+
+  it("no-ops without a failed run or without a key", async () => {
+    const noRun = storeWith({});
+    noRun.store.getState().setKey("msy_test_key");
+    noRun.store.getState().retry();
+    expect(noRun.store.getState().run).toBeNull();
+    expect(noRun.calls).toHaveLength(0);
+
+    const keyless = storeWith(rigFailsThenRecovers());
+    await driveToFailedRig(keyless);
+    keyless.store.getState().clearKey();
+    const callCount = keyless.calls.length;
+    keyless.store.getState().retry();
+    await drain();
+    expect(keyless.store.getState().run?.status).toBe("failed");
+    expect(keyless.calls).toHaveLength(callCount);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Terminal + start over + unmount
 // ---------------------------------------------------------------------------
 

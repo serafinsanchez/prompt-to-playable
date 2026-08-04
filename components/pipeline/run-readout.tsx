@@ -43,12 +43,7 @@ export function RunReadout() {
       <p data-testid="run-readout" className="font-mono text-xs text-muted">
         {run.creditsSpent} credits. {formatElapsed(elapsed)} elapsed.
       </p>
-      {run.waitingForQueue && (
-        <p className="font-mono text-xs text-warning">Meshy queue full — waiting.</p>
-      )}
-      {run.rateLimitBackoffMs !== null && (
-        <p className="font-mono text-xs text-warning">Rate limited — backing off.</p>
-      )}
+      {/* The two 429 flavors render on the active stage row (US-06), not here. */}
       {tickError !== null && (
         <p className="font-mono text-xs text-warning">Poll failed — retrying. {tickError}</p>
       )}

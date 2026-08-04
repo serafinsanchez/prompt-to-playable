@@ -94,6 +94,52 @@ export function createEmptyRun(prompt: string): PipelineRun {
   };
 }
 
+/**
+ * Revive a failed run for a user-clicked retry (US-06): reset the failed
+ * stage — and nothing upstream — to factory-pending, and put the run back in
+ * "running" so createPipeline({run}) resumes it. Upstream stages keep their
+ * task ids, so the recreated stage chains off them and re-spends only its own
+ * credits. Pure: returns a new snapshot, never mutates the input.
+ */
+export function retryFailedStage(run: PipelineRun): PipelineRun {
+  // At most one stage can be "failed": applyTask halts the run on the first
+  // failure and tick() no-ops on a non-running run, so `find` is exhaustive.
+  const failedStage = PIPELINE_STAGES.find(
+    (stage) => run.stages[stage].status === "failed",
+  );
+  if (run.status !== "failed" || failedStage === undefined) {
+    throw new Error("retryFailedStage: run has no failed stage");
+  }
+
+  // Failed tasks normally auto-refund (creditCost 0 → reset to null), but if
+  // Meshy reported real consumed credits, keep them counted — the credit
+  // total must stay honest across a retry.
+  const consumedCredits = run.stages[failedStage].creditCost;
+  const next = clone(run);
+  next.stages[failedStage] = {
+    stage: failedStage,
+    status: "pending",
+    taskId: null,
+    progress: 0,
+    precedingTasks: null,
+    creditCost: consumedCredits !== null && consumedCredits > 0 ? consumedCredits : null,
+    modelUrl: null,
+    startedAt: null,
+    completedAt: null,
+    error: null,
+  };
+  next.status = "running";
+  next.completedAt = null;
+  next.waitingForQueue = false;
+  next.rateLimitBackoffMs = null;
+  next.nextPollAt = null; // the next tick polls immediately
+  next.creditsSpent = Object.values(next.stages).reduce(
+    (sum, stage) => sum + (stage.creditCost ?? 0),
+    0,
+  );
+  return next;
+}
+
 export function createPipeline(options: CreatePipelineOptions): Pipeline {
   const { client, clock } = options;
   let run: PipelineRun = options.run ? clone(options.run) : createEmptyRun("");
@@ -250,10 +296,13 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
               : Math.min(run.rateLimitBackoffMs * 2, RATE_LIMIT_MAX_BACKOFF_MS);
           run.rateLimitBackoffMs = backoff;
           run.nextPollAt = now + backoff;
+          // The flavors are mutually exclusive in state, not just in copy.
+          run.waitingForQueue = false;
         } else if (error instanceof NoMoreConcurrentTasksError) {
           // Queue full: nothing wrong with our rate — keep the normal cadence
           // and let the UI say "Meshy queue full — waiting".
           run.waitingForQueue = true;
+          run.rateLimitBackoffMs = null;
           run.nextPollAt = now + POLL_INTERVAL_MS;
         } else {
           emit();

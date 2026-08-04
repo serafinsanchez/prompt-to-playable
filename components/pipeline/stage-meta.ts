@@ -8,10 +8,24 @@
  * created yet) — those two must never merge (docs/ARCHITECTURE.md §4).
  */
 
-import type { AnimationClip, StageId, StageState } from "../../lib/meshy/types";
+import {
+  PIPELINE_STAGES,
+  STAGE_CREDITS,
+  type AnimationClip,
+  type PipelineRun,
+  type StageId,
+  type StageState,
+} from "../../lib/meshy/types";
 
 /** Visual state of a rail row — drives glyph, ring, and copy together (a11y: never color alone). */
-export type RowKind = "pending" | "queued" | "running" | "succeeded" | "failed";
+export type RowKind =
+  | "pending"
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "backoff"
+  | "queue-full";
 
 export interface RowPresentation {
   kind: RowKind;
@@ -57,4 +71,95 @@ export function rowPresentation(state: StageState): RowPresentation {
   }
 
   return { kind: "pending", meta: "" };
+}
+
+/**
+ * US-06: the two run-level 429 flavors land on the ACTIVE row — the first
+ * stage still doing (or waiting to do) work. They stay out of rowPresentation
+ * so per-stage mapping remains pure; the rail overlays this on one row only.
+ * Backoff (RateLimitExceeded, auto-retries itself) wins over queue-full
+ * (NoMoreConcurrentTasks, normal cadence) when both flags linger.
+ */
+export function backpressure(
+  run: PipelineRun,
+): { stage: StageId; presentation: RowPresentation } | null {
+  if (run.status !== "running") return null;
+
+  if (run.rateLimitBackoffMs !== null) {
+    const active = PIPELINE_STAGES.find((s) => run.stages[s].status !== "succeeded");
+    if (active === undefined) return null;
+    const seconds = Math.round(run.rateLimitBackoffMs / 1000);
+    return {
+      stage: active,
+      presentation: { kind: "backoff", meta: `backing off · ${String(seconds)}s` },
+    };
+  }
+
+  if (run.waitingForQueue) {
+    // The blocked stage is the one whose create bounced: first with no task yet.
+    const blocked = PIPELINE_STAGES.find(
+      (s) => run.stages[s].status !== "succeeded" && run.stages[s].taskId === null,
+    );
+    if (blocked === undefined) return null;
+    return {
+      stage: blocked,
+      presentation: { kind: "queue-full", meta: "queue full — waiting" },
+    };
+  }
+
+  return null;
+}
+
+/** The common case — auto-refund is the DevEx teaching moment. */
+export const AUTO_REFUND_COPY = "Failed tasks auto-refund. This stage cost 0 credits.";
+
+export interface FailureCopy {
+  /** Credit outcome of the failure, derived from the stage's actual creditCost. */
+  refundLine: string;
+  /** Plain-words context for input-shaped failures; null when the error speaks for itself. */
+  explainer: string | null;
+  /** "Retry rig — 5 credits." — the published price of re-running just this stage. */
+  retryLabel: string;
+  /** "Preview, refine, remesh are kept." — null when nothing upstream succeeded. */
+  keptLine: string | null;
+}
+
+const RIG_EXPLAINER =
+  "Rigging needs a standing, bipedal, humanoid character. Reshape the prompt toward that.";
+const PREVIEW_EXPLAINER =
+  "Preview failed before any geometry existed — the prompt is the input. Edit it, or retry as-is.";
+
+/** US-06 failure panel copy for the run's failed stage; null if none failed. */
+export function failureCopy(run: PipelineRun): FailureCopy | null {
+  const failedStage = PIPELINE_STAGES.find((s) => run.stages[s].status === "failed");
+  if (failedStage === undefined) return null;
+
+  const kept = PIPELINE_STAGES.filter((s) => run.stages[s].status === "succeeded").map(
+    stageDisplayName,
+  );
+  const keptLine =
+    kept.length === 0
+      ? null
+      : `${capitalize(kept.join(", "))} ${kept.length === 1 ? "is" : "are"} kept.`;
+
+  // Honest accounting that keeps the teaching moment: auto-refund is the
+  // rule, so a non-zero charge is stated as the exception — never silently
+  // swapped for a blind "0 credits" claim, never dropped.
+  const consumed = run.stages[failedStage].creditCost ?? 0;
+  const refundLine =
+    consumed > 0
+      ? `Failed tasks usually auto-refund. Meshy charged ${String(consumed)} credits for this one.`
+      : AUTO_REFUND_COPY;
+
+  return {
+    refundLine,
+    explainer:
+      failedStage === "rig" ? RIG_EXPLAINER : failedStage === "preview" ? PREVIEW_EXPLAINER : null,
+    retryLabel: `Retry ${stageDisplayName(failedStage)} — ${String(STAGE_CREDITS[failedStage])} credits.`,
+    keptLine,
+  };
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

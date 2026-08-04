@@ -8,8 +8,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { StageState } from "../../lib/meshy/types";
-import { rowPresentation, stageDisplayName } from "../../components/pipeline/stage-meta";
+import { createEmptyRun } from "../../lib/meshy/pipeline";
+import type { PipelineRun, StageId, StageState } from "../../lib/meshy/types";
+import {
+  backpressure,
+  failureCopy,
+  rowPresentation,
+  stageDisplayName,
+} from "../../components/pipeline/stage-meta";
 
 function state(overrides: Partial<StageState> = {}): StageState {
   return {
@@ -25,6 +31,30 @@ function state(overrides: Partial<StageState> = {}): StageState {
     error: null,
     ...overrides,
   };
+}
+
+/** A running run with the listed stages succeeded (task ids kept) and the next stage optionally shaped. */
+function runWith(
+  succeededStages: StageId[],
+  overrides: Partial<PipelineRun> = {},
+  stageOverrides: Partial<Record<StageId, Partial<StageState>>> = {},
+): PipelineRun {
+  const run = createEmptyRun("a brave knight");
+  run.status = "running";
+  for (const [index, stage] of succeededStages.entries()) {
+    Object.assign(run.stages[stage], {
+      status: "succeeded",
+      taskId: `${stage}-000${String(index + 1)}`,
+      progress: 100,
+      creditCost: 5,
+      startedAt: 0,
+      completedAt: 1000,
+    });
+  }
+  for (const [stage, patch] of Object.entries(stageOverrides) as [StageId, Partial<StageState>][]) {
+    Object.assign(run.stages[stage], patch);
+  }
+  return { ...run, ...overrides };
 }
 
 describe("stageDisplayName", () => {
@@ -110,5 +140,111 @@ describe("rowPresentation", () => {
     );
     expect(row.kind).toBe("failed");
     expect(row.meta).toBe("failed");
+  });
+});
+
+describe("backpressure (US-06: run-level 429s land on the active row)", () => {
+  it("returns null while the run is healthy or terminal", () => {
+    expect(backpressure(runWith([], {}, { preview: { status: "running", taskId: "preview-0001" } }))).toBeNull();
+    expect(backpressure(runWith([], { status: "failed" }))).toBeNull();
+    expect(
+      backpressure(runWith([], { status: "failed", rateLimitBackoffMs: 8000 })),
+    ).toBeNull();
+  });
+
+  it("RateLimitExceeded: the active row backs off with mono seconds", () => {
+    const run = runWith(
+      ["preview"],
+      { rateLimitBackoffMs: 16_000 },
+      { refine: { status: "running", taskId: "refine-0002" } },
+    );
+    expect(backpressure(run)).toEqual({
+      stage: "refine",
+      presentation: { kind: "backoff", meta: "backing off · 16s" },
+    });
+  });
+
+  it("backoff also lands on a not-yet-created stage (throttled create)", () => {
+    const run = runWith(["preview", "refine"], { rateLimitBackoffMs: 8000 });
+    expect(backpressure(run)?.stage).toBe("remesh");
+    expect(backpressure(run)?.presentation.meta).toBe("backing off · 8s");
+  });
+
+  it("NoMoreConcurrentTasks: the blocked (uncreated) stage reads queue full — waiting", () => {
+    const run = runWith(["preview", "refine", "remesh"], { waitingForQueue: true });
+    expect(backpressure(run)).toEqual({
+      stage: "rig",
+      presentation: { kind: "queue-full", meta: "queue full — waiting" },
+    });
+  });
+
+  it("queue-full lands on the first uncreated animate clip mid-group", () => {
+    const run = runWith(
+      ["preview", "refine", "remesh", "rig", "animate:idle"],
+      { waitingForQueue: true },
+      { "animate:walk": { status: "running", taskId: "animate-0005" } },
+    );
+    expect(backpressure(run)?.stage).toBe("animate:run");
+  });
+
+  it("backoff wins when both flags are set — it is the stricter state", () => {
+    const run = runWith(["preview"], { waitingForQueue: true, rateLimitBackoffMs: 8000 });
+    expect(backpressure(run)?.presentation.kind).toBe("backoff");
+  });
+});
+
+describe("failureCopy (US-06: honest retry economics + contextual explainers)", () => {
+  it("rig failure: biped explainer, published retry price, kept upstream stages", () => {
+    const run = runWith(["preview", "refine", "remesh"], { status: "failed" }, {
+      rig: { status: "failed", error: "422 Pose estimation failed", creditCost: 0 },
+    });
+    const copy = failureCopy(run);
+    expect(copy?.explainer).toMatch(/standing, bipedal, humanoid/);
+    expect(copy?.retryLabel).toBe("Retry rig — 5 credits.");
+    expect(copy?.keptLine).toBe("Preview, refine, remesh are kept.");
+    expect(copy?.refundLine).toBe("Failed tasks auto-refund. This stage cost 0 credits.");
+  });
+
+  it("refund copy derives from the stage's actual creditCost, never asserted blindly", () => {
+    const run = runWith(["preview"], { status: "failed" }, {
+      refine: { status: "failed", error: "texture generation failed", creditCost: 2 },
+    });
+    expect(failureCopy(run)?.refundLine).toBe(
+      "Failed tasks usually auto-refund. Meshy charged 2 credits for this one.",
+    );
+  });
+
+  it("preview failure: points at the prompt; nothing upstream to keep", () => {
+    const run = runWith([], { status: "failed" }, {
+      preview: { status: "failed", error: "prompt rejected by moderation", creditCost: 0 },
+    });
+    const copy = failureCopy(run);
+    expect(copy?.explainer).toMatch(/prompt/);
+    expect(copy?.retryLabel).toBe("Retry preview — 20 credits.");
+    expect(copy?.keptLine).toBeNull();
+  });
+
+  it("refine failure: no special explainer, kept line lists preview only", () => {
+    const run = runWith(["preview"], { status: "failed" }, {
+      refine: { status: "failed", error: "texture generation failed", creditCost: 0 },
+    });
+    const copy = failureCopy(run);
+    expect(copy?.explainer).toBeNull();
+    expect(copy?.retryLabel).toBe("Retry refine — 10 credits.");
+    expect(copy?.keptLine).toBe("Preview is kept.");
+  });
+
+  it("animate clip failure: kept line uses display names for succeeded stages", () => {
+    const run = runWith(["preview", "refine", "remesh", "rig"], { status: "failed" }, {
+      "animate:idle": { status: "failed", error: "animation solver error", creditCost: 0 },
+      "animate:walk": { status: "running", taskId: "animate-0005" },
+    });
+    const copy = failureCopy(run);
+    expect(copy?.retryLabel).toBe("Retry idle — 3 credits.");
+    expect(copy?.keptLine).toBe("Preview, refine, remesh, rig are kept.");
+  });
+
+  it("returns null when the run has no failed stage", () => {
+    expect(failureCopy(runWith(["preview"]))).toBeNull();
   });
 });

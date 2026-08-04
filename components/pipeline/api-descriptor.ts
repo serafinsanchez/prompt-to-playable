@@ -104,7 +104,11 @@ export function creditCopy(state: StageState, stage: StageId): string {
     return `${String(state.creditCost ?? 0)} credits consumed`;
   }
   if (state.status === "failed") {
-    return `${String(state.creditCost ?? 0)} credits — failed tasks auto-refund`;
+    // Only claim auto-refund when the refund actually happened (cost 0).
+    const cost = state.creditCost ?? 0;
+    return cost > 0
+      ? `${String(cost)} credits consumed — no auto-refund reported`
+      : `0 credits — failed tasks auto-refund`;
   }
   return `${String(STAGE_CREDITS[stage])} credits`;
 }

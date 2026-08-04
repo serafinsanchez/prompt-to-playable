@@ -6,6 +6,7 @@ import {
   createPipeline,
   POLL_INTERVAL_MS,
   RATE_LIMIT_BASE_BACKOFF_MS,
+  retryFailedStage,
 } from "../pipeline";
 import { loadRun, saveRun } from "../storage";
 import type { StorageAdapter } from "../storage";
@@ -384,6 +385,46 @@ describe("NoMoreConcurrentTasks", () => {
   });
 });
 
+describe("429 flag hygiene", () => {
+  it("a rate-limit tick clears waitingForQueue — the flavors are mutually exclusive", async () => {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { error: new NoMoreConcurrentTasksError("queue full") },
+        { error: new RateLimitExceededError("slow down") },
+      ],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick(); // queue full
+    expect(pipeline.getRun().waitingForQueue).toBe(true);
+
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick(); // now rate limited instead
+    const run = pipeline.getRun();
+    expect(run.rateLimitBackoffMs).toBe(RATE_LIMIT_BASE_BACKOFF_MS);
+    expect(run.waitingForQueue).toBe(false);
+  });
+
+  it("a queue-full tick clears the rate-limit backoff", async () => {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { error: new RateLimitExceededError("slow down") },
+        { error: new NoMoreConcurrentTasksError("queue full") },
+      ],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick(); // rate limited
+    expect(pipeline.getRun().rateLimitBackoffMs).toBe(RATE_LIMIT_BASE_BACKOFF_MS);
+
+    set(RATE_LIMIT_BASE_BACKOFF_MS);
+    await pipeline.tick(); // now the queue is the problem, not our rate
+    const run = pipeline.getRun();
+    expect(run.waitingForQueue).toBe(true);
+    expect(run.rateLimitBackoffMs).toBeNull();
+  });
+});
+
 describe("resume from storage", () => {
   it("restores a mid-pipeline run and completes it without re-running earlier stages", async () => {
     const storage = memoryStorage();
@@ -438,5 +479,179 @@ describe("resume from storage", () => {
     expect(run.creditsSpent).toBe(55);
     expect(run.stages.preview.taskId).toBe("preview-0001");
     expect(run.prompt).toBe("a brave knight");
+  });
+});
+
+describe("retryFailedStage", () => {
+  /** Drive a fresh pipeline to a rig failure with preview/refine/remesh done. */
+  async function rigFailedRun(): Promise<PipelineRun> {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { body: { result: "preview-0001" } },
+        { body: { result: "refine-0002" } },
+      ],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { body: succeeded("preview-0001", 20) },
+        { body: succeeded("refine-0002", 10) },
+      ],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
+      [`GET ${REMESH_PATH}/:id`]: [{ body: succeeded("remesh-0003", 5) }],
+      [`POST ${RIGGING_PATH}`]: [{ body: { result: "rigging-0003" } }],
+      [`GET ${RIGGING_PATH}/:id`]: [
+        { body: failed("rigging-0003", "422 Pose estimation failed") },
+      ],
+    });
+    pipeline.start("an amorphous blob");
+    await pipeline.tick(); // create preview
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick(); // preview succeeds, refine created
+    set(2 * POLL_INTERVAL_MS);
+    await pipeline.tick(); // refine succeeds, remesh created
+    set(3 * POLL_INTERVAL_MS);
+    await pipeline.tick(); // remesh succeeds, rig created
+    set(4 * POLL_INTERVAL_MS);
+    await pipeline.tick(); // rig fails — run halts
+    return pipeline.getRun();
+  }
+
+  it("resets only the failed stage and revives the run, without mutating the input", async () => {
+    const halted = await rigFailedRun();
+    expect(halted.status).toBe("failed");
+
+    const retried = retryFailedStage(halted);
+
+    // The failed stage is factory-fresh again.
+    const rig = retried.stages.rig;
+    expect(rig.status).toBe("pending");
+    expect(rig.taskId).toBeNull();
+    expect(rig.error).toBeNull();
+    expect(rig.progress).toBe(0);
+    expect(rig.creditCost).toBeNull();
+    expect(rig.startedAt).toBeNull();
+    expect(rig.completedAt).toBeNull();
+
+    // Upstream stages keep their results and task ids — nothing re-spends.
+    expect(retried.stages.preview.status).toBe("succeeded");
+    expect(retried.stages.preview.taskId).toBe("preview-0001");
+    expect(retried.stages.remesh.status).toBe("succeeded");
+    expect(retried.stages.remesh.taskId).toBe("remesh-0003");
+    expect(retried.creditsSpent).toBe(35);
+
+    // The run itself is live again and polls immediately.
+    expect(retried.status).toBe("running");
+    expect(retried.completedAt).toBeNull();
+    expect(retried.nextPollAt).toBeNull();
+    expect(retried.waitingForQueue).toBe(false);
+    expect(retried.rateLimitBackoffMs).toBeNull();
+
+    // Pure: the halted snapshot is untouched.
+    expect(halted.status).toBe("failed");
+    expect(halted.stages.rig.status).toBe("failed");
+  });
+
+  it("resumes through createPipeline reusing upstream ids — no upstream create calls", async () => {
+    const retried = retryFailedStage(await rigFailedRun());
+
+    // Fresh transport with ONLY rig + animation fixtures: any attempt to
+    // re-create preview/refine/remesh throws "no fixture" and fails the test.
+    const { transport, calls } = makeFixtureTransport({
+      [`POST ${RIGGING_PATH}`]: [{ body: { result: "rigging-0004" } }],
+      [`GET ${RIGGING_PATH}/:id`]: [{ body: rigSucceeded("rigging-0004", 5) }],
+      ...ANIMATION_FIXTURES,
+    });
+    let t = 5 * POLL_INTERVAL_MS;
+    const pipeline = createPipeline({
+      client: createMeshyClient(transport),
+      clock: { now: () => t },
+      run: retried,
+    });
+
+    await pipeline.tick(); // re-creates ONLY the rig task, chained to remesh
+    const rigCreate = calls.find((c) => c.key === `POST ${RIGGING_PATH}`);
+    expect(JSON.stringify(rigCreate!.body)).toContain('"input_task_id":"remesh-0003"');
+    expect(calls.every((c) => c.key.startsWith(`POST ${RIGGING_PATH}`) || c.key.startsWith(`GET ${RIGGING_PATH}`))).toBe(true);
+
+    t = 6 * POLL_INTERVAL_MS;
+    await pipeline.tick(); // rig succeeds, animations created
+    t = 7 * POLL_INTERVAL_MS;
+    await pipeline.tick(); // all clips succeed
+
+    const run = pipeline.getRun();
+    expect(run.status).toBe("succeeded");
+    // Retry re-spent only the rig stage: 20+10+5+5+15 = 55.
+    expect(run.creditsSpent).toBe(55);
+  });
+
+  it("retries a single failed animate clip while keeping succeeded siblings", async () => {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { body: { result: "preview-0001" } },
+        { body: { result: "refine-0002" } },
+      ],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { body: succeeded("preview-0001", 20) },
+        { body: succeeded("refine-0002", 10) },
+      ],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
+      [`GET ${REMESH_PATH}/:id`]: [{ body: succeeded("remesh-0003", 5) }],
+      [`POST ${RIGGING_PATH}`]: [{ body: { result: "rigging-0003" } }],
+      [`GET ${RIGGING_PATH}/:id`]: [{ body: rigSucceeded("rigging-0003", 5) }],
+      [`POST ${ANIMATIONS_PATH}`]: ANIMATION_IDS.map((id) => ({ body: { result: id } })),
+      [`GET ${ANIMATIONS_PATH}/:id`]: [
+        // idle fails first; the loop halts before polling the other clips.
+        { body: failed("animate-0004", "animation solver error") },
+      ],
+    });
+    pipeline.start("a brave knight");
+    for (let i = 0; i <= 6; i += 1) {
+      set(i * POLL_INTERVAL_MS);
+      await pipeline.tick();
+    }
+    const halted = pipeline.getRun();
+    expect(halted.status).toBe("failed");
+    expect(halted.stages["animate:idle"].status).toBe("failed");
+
+    const retried = retryFailedStage(halted);
+    expect(retried.stages["animate:idle"].status).toBe("pending");
+    expect(retried.stages["animate:idle"].taskId).toBeNull();
+    // Siblings keep whatever state they had — never reset.
+    expect(retried.stages["animate:walk"].taskId).toBe("animate-0005");
+    expect(retried.stages.rig.status).toBe("succeeded");
+  });
+
+  it("throws when the run has no failed stage", () => {
+    expect(() => retryFailedStage(createEmptyRun("a brave knight"))).toThrow(
+      /no failed stage/,
+    );
+  });
+
+  it("preserves real consumed credits on the failed stage — honest accounting over tidy resets", async () => {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [
+        { body: { result: "preview-0001" } },
+        { body: { result: "refine-0002" } },
+      ],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { body: succeeded("preview-0001", 20) },
+        // Meshy reports 2 credits actually consumed — no auto-refund this time.
+        { body: task("refine-0002", "FAILED", { consumed_credits: 2, task_error: { message: "texture generation failed" } }) },
+      ],
+    });
+    pipeline.start("a brave knight");
+    await pipeline.tick();
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick();
+    set(2 * POLL_INTERVAL_MS);
+    await pipeline.tick();
+    const halted = pipeline.getRun();
+    expect(halted.stages.refine.creditCost).toBe(2);
+
+    const retried = retryFailedStage(halted);
+    expect(retried.stages.refine.creditCost).toBe(2);
+    expect(retried.creditsSpent).toBe(22);
+
+    // The common auto-refund case (0 credits) still resets clean to null.
+    const refunded = retryFailedStage(await rigFailedRun());
+    expect(refunded.stages.rig.creditCost).toBeNull();
   });
 });

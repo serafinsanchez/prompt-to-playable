@@ -7,9 +7,11 @@
  * duration). Mesh stages (preview/refine/remesh) get an artifact thumbnail
  * as they land; rig/animate stay iconographic — US-05 owns the scene payoff.
  *
- * Failure copy and retry are US-06; a failed row here renders its verbatim
- * error string plainly and stops. The signature completion choreography is
- * P2 US-07 — this builds the structure (ring, tick, thumbnail slot) only.
+ * Failure states are US-06: a failed row expands into the StageFailure panel
+ * (verbatim error, auto-refund note, retry), and the run-level 429 flavors
+ * overlay the active row via backpressure(). The signature completion
+ * choreography is P2 US-07 — this builds the structure (ring, tick,
+ * thumbnail slot) only.
  */
 
 import { useState } from "react";
@@ -22,7 +24,8 @@ import {
 import { ApiPanel } from "./api-panel";
 import { ArtifactThumbnail } from "./artifact-thumbnail";
 import { ProgressRing } from "./progress-ring";
-import { rowPresentation, stageDisplayName } from "./stage-meta";
+import { backpressure, rowPresentation, stageDisplayName, type RowPresentation } from "./stage-meta";
+import { StageFailure } from "./stage-failure";
 import { usePipeline } from "./use-pipeline";
 
 const LINEAR_ROWS: readonly StageId[] = ["preview", "refine", "remesh", "rig"];
@@ -42,13 +45,16 @@ function StageRow({
   state,
   index,
   compact = false,
+  override,
 }: {
   run: PipelineRun;
   state: StageState;
   index: number;
   compact?: boolean;
+  /** US-06: run-level backpressure (backoff / queue-full) lands on the active row only. */
+  override?: RowPresentation | undefined;
 }) {
-  const { kind, meta } = rowPresentation(state);
+  const { kind, meta } = override ?? rowPresentation(state);
   const name = stageDisplayName(state.stage);
   // US-04: every row expands to the API call that produced it.
   const [expanded, setExpanded] = useState(false);
@@ -77,13 +83,22 @@ function StageRow({
           {name}
         </span>
         {/* Screen readers + the US-03a resume spec both read the state word;
-            failed rows already say it in the visible meta. */}
-        {kind !== "failed" && <span className="sr-only">{kind}</span>}
+            failed rows say it in the visible meta, and the backpressure kinds
+            already read well from their visible copy — no slug announcements. */}
+        {kind !== "failed" && kind !== "backoff" && kind !== "queue-full" && (
+          <span className="sr-only">{kind}</span>
+        )}
         <span className="flex-1" aria-hidden />
         {meta !== "" && (
           <span
             className={`text-right font-mono text-xs tabular-nums ${
-              kind === "failed" ? "text-error" : kind === "succeeded" ? "text-muted" : "text-foreground"
+              kind === "failed"
+                ? "text-error"
+                : kind === "backoff" || kind === "queue-full"
+                  ? "text-warning"
+                  : kind === "succeeded"
+                    ? "text-muted"
+                    : "text-foreground"
             }`}
           >
             {meta}
@@ -110,15 +125,7 @@ function StageRow({
 
       {expanded && <ApiPanel run={run} stage={state.stage} />}
 
-      {/* US-06 owns failure copy/retry — render the verbatim error plainly. */}
-      {state.error !== null && (
-        <p
-          data-testid={`stage-error-${state.stage}`}
-          className="pl-8 font-mono text-xs leading-relaxed text-error"
-        >
-          {state.error}
-        </p>
-      )}
+      {kind === "failed" && <StageFailure run={run} state={state} />}
     </li>
   );
 }
@@ -126,6 +133,8 @@ function StageRow({
 export function StageRail() {
   const run = usePipeline((state) => state.run);
   if (run === null) return null;
+  // US-06: at most one row carries the run-level 429 overlay.
+  const pressure = backpressure(run);
 
   return (
     <div
@@ -137,7 +146,13 @@ export function StageRail() {
     >
       <ol className="flex flex-col gap-2">
         {LINEAR_ROWS.map((stage, index) => (
-          <StageRow key={stage} run={run} state={run.stages[stage]} index={index} />
+          <StageRow
+            key={stage}
+            run={run}
+            state={run.stages[stage]}
+            index={index}
+            override={pressure?.stage === stage ? pressure.presentation : undefined}
+          />
         ))}
       </ol>
 
@@ -159,6 +174,9 @@ export function StageRail() {
               state={run.stages[`animate:${clip}`]}
               index={LINEAR_ROWS.length + 1 + index}
               compact
+              override={
+                pressure?.stage === `animate:${clip}` ? pressure.presentation : undefined
+              }
             />
           ))}
         </ol>
