@@ -1,0 +1,28 @@
+[
+  {
+    "slug": "knight",
+    "prompt": "low-poly knight in full plate armor, standing upright, arms at sides, facing forward",
+    "glbPath": "/gallery/knight/rig.8d812819.glb",
+    "clipPaths": {
+      "idle": "/gallery/knight/idle.48b88150.glb",
+      "walk": "/gallery/knight/walk.c0747f1e.glb",
+      "run": "/gallery/knight/run.1b59fe82.glb",
+      "jump": "/gallery/knight/jump.cc6d127e.glb",
+      "emote": "/gallery/knight/emote.a82d43a6.glb"
+    },
+    "creditTotal": 55,
+    "generationSeconds": 431,
+    "stageCredits": {
+      "preview": 20,
+      "refine": 10,
+      "remesh": 5,
+      "rig": 5,
+      "animate:idle": 3,
+      "animate:walk": 3,
+      "animate:run": 3,
+      "animate:jump": 3,
+      "animate:emote": 3
+    },
+    "polyCount": 29015
+  }
+]

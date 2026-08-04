@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:a11y": "playwright test tests/a11y.spec.ts",
-    "check:tokens": "bash scripts/check-tokens.sh"
+    "check:tokens": "bash scripts/check-tokens.sh",
+    "pregen": "tsx scripts/pregen/index.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4",
     "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
     "@gltf-transform/functions": "^4.4.2",
     "@playwright/test": "^1",
     "@tailwindcss/postcss": "^4",
@@ -34,6 +36,7 @@
     "@types/three": "^0.185.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "meshoptimizer": "^1.1.1",
     "tailwindcss": "^4",
     "tsx": "^4",
     "typescript": "^5",
