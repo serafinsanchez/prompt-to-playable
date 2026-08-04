@@ -13,9 +13,10 @@
  * Exits non-zero if any clip fails to bind or any file fails to decode.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+import { clipYawSpreadDegrees } from "../../lib/glb/facing-bake";
 import { ANIMATION_CLIPS } from "../../lib/meshy/types";
 import { assertValidManifest } from "./manifest";
 import { createGalleryIO } from "./optimize";
@@ -76,6 +77,61 @@ for (const entry of manifest) {
   if (textures.length === 0) {
     console.log(`${entry.slug}: WARNING — rig has no textures (optimization stripped them?)`);
     failures += 1;
+  }
+
+  // US-10: the game-ready single-file GLB, gated on the spec's contract.
+  if (!entry.gameReadyPath || entry.gameReadySizeBytes === undefined) {
+    console.log(`${entry.slug}: game-ready MISSING — run npm run pregen:gameready`);
+    failures += 1;
+  } else {
+    const gameReadyProblems: string[] = [];
+    let merged;
+    try {
+      merged = await io.read(diskPath(entry.gameReadyPath));
+    } catch (err) {
+      console.log(`${entry.slug}: game-ready FAIL — failed to decode: ${String(err)}`);
+      failures += 1;
+      continue;
+    }
+    const root = merged.getRoot();
+
+    const required = root.listExtensionsRequired().map((e) => e.extensionName);
+    if (required.length > 0) gameReadyProblems.push(`requires extensions: ${required.join(", ")}`);
+
+    const names = root.listAnimations().map((a) => a.getName()).sort();
+    const expected = [...ANIMATION_CLIPS].sort();
+    if (JSON.stringify(names) !== JSON.stringify(expected)) {
+      gameReadyProblems.push(`clips [${names.join(", ")}] != [${expected.join(", ")}]`);
+    }
+    if (root.listMeshes().length !== 1) gameReadyProblems.push(`${String(root.listMeshes().length)} meshes`);
+    if (root.listSkins().length !== 1) gameReadyProblems.push(`${String(root.listSkins().length)} skins`);
+
+    const badMime = root
+      .listTextures()
+      .map((t) => t.getMimeType())
+      .filter((mime) => mime !== "image/png" && mime !== "image/jpeg");
+    if (badMime.length > 0) gameReadyProblems.push(`non-core texture: ${badMime.join(", ")}`);
+
+    let spread = 0;
+    try {
+      spread = clipYawSpreadDegrees(merged);
+      if (spread > 0.5) gameReadyProblems.push(`yaw spread ${spread.toFixed(2)}°`);
+    } catch (err) {
+      gameReadyProblems.push(`yaw spread check threw: ${String(err)}`);
+    }
+
+    const actualBytes = statSync(diskPath(entry.gameReadyPath)).size;
+    if (actualBytes > 8.5 * 1024 * 1024) gameReadyProblems.push(`${String(actualBytes)} bytes > 8.5 MB`);
+    if (actualBytes !== entry.gameReadySizeBytes) {
+      gameReadyProblems.push(`manifest says ${String(entry.gameReadySizeBytes)} bytes, file is ${String(actualBytes)}`);
+    }
+
+    if (gameReadyProblems.length > 0) {
+      console.log(`${entry.slug}: game-ready FAIL — ${gameReadyProblems.join("; ")}`);
+      failures += gameReadyProblems.length;
+    } else {
+      console.log(`${entry.slug}: game-ready ok (${names.length} clips, yaw spread ${spread.toFixed(2)}°)`);
+    }
   }
 }
 
