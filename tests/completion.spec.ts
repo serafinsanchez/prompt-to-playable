@@ -27,12 +27,12 @@ const STAGES = [
  * coexistence test needs the generated rig URL to differ from the stage's.
  */
 const MOCK_GLB: Record<string, string> = {
-  rig: "/gallery/goblin-scout/rig.dbdf23df.glb",
-  "animate:idle": "/gallery/goblin-scout/idle.ac8005c8.glb",
-  "animate:walk": "/gallery/goblin-scout/walk.60033e63.glb",
-  "animate:run": "/gallery/goblin-scout/run.d48f78c2.glb",
-  "animate:jump": "/gallery/goblin-scout/jump.618f4e1a.glb",
-  "animate:emote": "/gallery/goblin-scout/emote.1b9c887c.glb",
+  rig: "/gallery/goblin-scout/rig.f4e1834c.glb",
+  "animate:idle": "/gallery/goblin-scout/idle.ce259443.glb",
+  "animate:walk": "/gallery/goblin-scout/walk.eaf2f2b2.glb",
+  "animate:run": "/gallery/goblin-scout/run.ca988cf8.glb",
+  "animate:jump": "/gallery/goblin-scout/jump.7dc8c128.glb",
+  "animate:emote": "/gallery/goblin-scout/emote.f590fd73.glb",
 };
 
 function makeSucceededRun(completedAgoMs: number) {
