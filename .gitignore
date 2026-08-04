@@ -27,3 +27,6 @@ docs/
 
 # SDD scratch (subagent-driven-development ledger/briefs — never commit)
 .superpowers/
+
+# session worktrees (harness-managed)
+.claude/worktrees/
