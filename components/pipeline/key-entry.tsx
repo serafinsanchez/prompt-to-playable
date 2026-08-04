@@ -21,12 +21,25 @@ export function KeyEntry() {
 
   return (
     <div className="flex flex-col gap-2">
-      <label
-        htmlFor={inputId}
-        className="font-mono text-xs uppercase tracking-caps text-muted"
-      >
-        Meshy API key
-      </label>
+      <div className="flex items-baseline justify-between gap-2">
+        <label
+          htmlFor={inputId}
+          className="font-mono text-xs uppercase tracking-caps text-muted"
+        >
+          Meshy API key
+        </label>
+        {/* The label focuses the input; getting a key is a different job, so
+            it gets its own control instead of hijacking the label click. */}
+        <a
+          href="https://www.meshy.ai/settings/api"
+          target="_blank"
+          rel="noopener"
+          data-testid="key-get-link"
+          className="rounded-sm font-mono text-xs text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:text-foreground"
+        >
+          Get a key <span aria-hidden="true">↗</span>
+        </a>
+      </div>
 
       {/* Deliberately never disabled, even mid-run: fixing a rejected key is
           the 401 recovery path, so the input and clear stay live. The
