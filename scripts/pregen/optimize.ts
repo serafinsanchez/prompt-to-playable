@@ -29,7 +29,7 @@ import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
 
 import { ANIMATION_CLIPS, type AnimationClip } from "../../lib/meshy/types";
 
-/** Max texture edge for gallery rigs; raw Meshy textures are 2048×2048 PNG. */
+/** Max texture edge for gallery rigs; raw Meshy textures are 4096×4096 PNG. */
 export const GALLERY_TEXTURE_SIZE = 1024;
 
 /** Quiet logger — the pregen script reports sizes itself. */

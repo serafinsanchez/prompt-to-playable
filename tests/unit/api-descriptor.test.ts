@@ -245,6 +245,12 @@ describe("stage body parameter pins", () => {
     expect(buildRefineTexturePrompt("")).toBe(REFINE_TEXTURE_STEER);
   });
 
+  it("buildRefineTexturePrompt trims a slice boundary that lands after a space", () => {
+    const combined = buildRefineTexturePrompt("word ".repeat(200));
+    expect(combined.length).toBeLessThanOrEqual(600);
+    expect(combined.includes(" ,")).toBe(false);
+  });
+
   it("remesh requests quad topology — the docs default is triangle, and this mesh is what gets rigged", () => {
     expect(stageRequest(chainedRun(), "remesh").body).toEqual({
       input_task_id: "refine-0002",

@@ -6,7 +6,7 @@
  * (`preview_task_id` / `input_task_id`) — never download-and-reupload.
  */
 
-import type { AnimationClip, MeshyTask } from "./types";
+import { REMESH_TARGET_POLYCOUNT, type AnimationClip, type MeshyTask } from "./types";
 import type { MeshyTransport } from "./transport";
 
 export const TEXT_TO_3D_PATH = "/openapi/v2/text-to-3d";
@@ -34,8 +34,8 @@ export const TEXT_TO_3D_AI_MODEL = "meshy-6";
  * returns raw high-poly triangles.
  */
 export const PREVIEW_SHOULD_REMESH = true;
-/** Same 30k budget the remesh stage targets (types.ts REMESH_TARGET_POLYCOUNT). */
-export const PREVIEW_TARGET_POLYCOUNT = 30_000;
+/** Same budget the remesh stage targets — literally shared, not just numerically equal. */
+export const PREVIEW_TARGET_POLYCOUNT = REMESH_TARGET_POLYCOUNT;
 
 /**
  * Refine texture steer: generative texturing can't spell, so any prompt
@@ -53,7 +53,7 @@ export const REFINE_REMOVE_LIGHTING = true;
 /** Meshy caps texture_prompt at 600 chars; user prompt leads, steer always survives. */
 const TEXTURE_PROMPT_MAX = 600;
 export function buildRefineTexturePrompt(prompt: string): string {
-  const lead = prompt.slice(0, TEXTURE_PROMPT_MAX - REFINE_TEXTURE_STEER.length - 2);
+  const lead = prompt.slice(0, TEXTURE_PROMPT_MAX - REFINE_TEXTURE_STEER.length - 2).trimEnd();
   return lead ? `${lead}, ${REFINE_TEXTURE_STEER}` : REFINE_TEXTURE_STEER;
 }
 export const RIGGING_PATH = "/openapi/v1/rigging";
