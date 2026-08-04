@@ -126,6 +126,18 @@ describe("meshArtifacts", () => {
     const [artifact] = meshArtifacts(runWith({ preview: { credits: 20, thumb: null } }));
     expect(artifact.imageUrl).toBeNull();
   });
+
+  it("never offers a GLB as an image source", () => {
+    // The lightbox puts imageUrl straight into an <img src>. A .glb there
+    // renders a broken-image icon; null routes to the snapshot path instead.
+    const artifacts = meshArtifacts(
+      runWith({ preview: { credits: 20, thumb: null }, refine: { credits: 10 } }),
+    );
+    expect(artifacts).toHaveLength(2);
+    for (const artifact of artifacts) {
+      expect(artifact.imageUrl?.endsWith(".glb") ?? false).toBe(false);
+    }
+  });
 });
 ```
 
@@ -190,7 +202,7 @@ export function meshArtifacts(run: PipelineRun): MeshArtifact[] {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npm run test -- tests/unit/artifacts.test.ts`
-Expected: PASS — 8 tests.
+Expected: PASS — 9 tests.
 
 - [ ] **Step 5: Point the rail at the shared constant**
 
@@ -231,10 +243,13 @@ git commit -m "feat(us-08): derive the enlargeable mesh artifact list"
 
 ### Task 2: Lightbox component + enlarge affordance (single artifact)
 
-The dialog, the open/close paths, and the enlarge button. Stepping is Task 3 — this task ships a working single-artifact lightbox.
+The dialog, the open/close paths, and the enlarge button. Stepping is Task 3 — this task ships a working single-artifact lightbox, including a usable image for stages that have no pre-rendered PNG.
+
+Both image sources land here on purpose. Stages with no `thumbnailUrl` (runs persisted before the field existed, or tasks Meshy never rendered) fall back to a WebGL snapshot currently taken at `SNAPSHOT_SIZE = 96`; upscaling that to 640px is mush, and pointing an `<img src>` at the GLB instead renders a broken-image icon. Raising the render to 512 and reusing it here is what makes the fallback path real, so it ships in the same commit as the dialog rather than leaving a knowingly-broken intermediate state on the branch. Rendering at 512 also sharpens the rail's own 32px slot on hi-DPI displays.
 
 **Files:**
 - Create: `components/pipeline/artifact-lightbox.tsx`
+- Modify: `components/pipeline/artifact-thumbnail.tsx:30` (`SNAPSHOT_SIZE` 96 → 512, export `snapshotGlb`)
 - Modify: `components/pipeline/stage-rail.tsx` (row restructure, open state, render the lightbox)
 - Test: `tests/stage-rail.spec.ts`
 
@@ -243,6 +258,7 @@ The dialog, the open/close paths, and the enlarge button. Stepping is Task 3 —
 - Produces:
   - `export interface ArtifactLightboxProps { artifacts: MeshArtifact[]; initialIndex: number; onClose: () => void }`
   - `export function ArtifactLightbox(props: ArtifactLightboxProps): React.ReactPortal | null`
+  - `export function snapshotGlb(url: string): Promise<string>` — promoted from module-private in `artifact-thumbnail.tsx` so the lightbox reuses the one shared renderer and its serialized queue.
   - Test IDs later tasks rely on: `enlarge-<stage>`, `artifact-lightbox`, `lightbox-image`, `lightbox-caption`, `lightbox-close`, `lightbox-scrim`.
 
 - [ ] **Step 1: Add thumbnail support to the Playwright fixtures**
@@ -380,7 +396,26 @@ test("enlarge: no affordance on stages without a mesh artifact", async ({ page }
 Run: `npx playwright test tests/stage-rail.spec.ts -g "enlarge:"`
 Expected: FAIL — all three, with `expect.toHaveAttribute` timing out because `enlarge-preview` does not exist.
 
-- [ ] **Step 4: Write the lightbox component**
+- [ ] **Step 4: Raise the snapshot size and export the renderer**
+
+In `components/pipeline/artifact-thumbnail.tsx`, change line 30:
+
+```ts
+// 512, not the rail's display size: the same snapshot backs the US-08
+// lightbox at up to 640px, and upscaling a 96px render is mush. One-shot
+// cost, and the rail's 32px slot gets a sharper downscale on hi-DPI for free.
+const SNAPSHOT_SIZE = 512;
+```
+
+Export the function so the lightbox shares the one renderer and its queue — change the declaration on line 36 from `async function snapshotGlb` to:
+
+```ts
+export async function snapshotGlb(url: string): Promise<string> {
+```
+
+Nothing else in that file changes; the rail still displays the result in its `size-8` slot.
+
+- [ ] **Step 5: Write the lightbox component**
 
 Create `components/pipeline/artifact-lightbox.tsx`:
 
@@ -408,6 +443,7 @@ Create `components/pipeline/artifact-lightbox.tsx`:
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MeshArtifact } from "./artifacts";
+import { snapshotGlb } from "./artifact-thumbnail";
 
 export interface ArtifactLightboxProps {
   /** Every landed mesh artifact, in pipeline order. */
@@ -419,8 +455,32 @@ export interface ArtifactLightboxProps {
 
 export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactLightboxProps) {
   const [index, setIndex] = useState(initialIndex);
+  const [fallback, setFallback] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const artifact = artifacts[index];
+
+  // No pre-rendered PNG (legacy run, or a task Meshy never rendered): take a
+  // one-shot 512px snapshot through the shared offscreen renderer — the same
+  // path and the same serialized queue the rail uses. Null whenever a real
+  // PNG exists or the index is out of range, which is also the effect's guard.
+  const snapshotSource =
+    artifact !== undefined && artifact.imageUrl === null ? artifact.modelUrl : null;
+
+  useEffect(() => {
+    if (snapshotSource === null) return;
+    let cancelled = false;
+    void snapshotGlb(snapshotSource)
+      .then((dataUrl) => {
+        if (!cancelled) setFallback(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFallback(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshotSource]);
 
   useEffect(() => {
     const node = dialogRef.current;
@@ -455,9 +515,11 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
     };
   }, [onClose]);
 
-  const artifact = artifacts[index];
+  // Every hook above runs unconditionally — React requires stable hook order,
+  // so this guard cannot move up.
   if (artifact === undefined) return null;
   const caption = `${artifact.label} · ${artifact.meta}`;
+  const shown = artifact.imageUrl ?? fallback;
 
   return createPortal(
     <div
@@ -477,16 +539,24 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
         }}
         className="flex w-full max-w-[min(80vw,640px)] flex-col gap-3 transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
       >
-        <span className="relative block aspect-square w-full overflow-hidden rounded-md border border-border bg-elevated">
-          {/* eslint-disable-next-line @next/next/no-img-element -- signed Meshy PNG; next/image optimizes nothing here */}
-          <img
-            key={artifact.stage}
-            data-testid="lightbox-image"
-            src={artifact.imageUrl ?? artifact.modelUrl}
-            alt={`${artifact.label} stage mesh, enlarged`}
-            draggable={false}
-            className="size-full object-contain transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
-          />
+        {/* The box is reserved up front and pulses while the snapshot renders,
+            so the caption never jumps under the pointer. */}
+        <span
+          className={`relative block aspect-square w-full overflow-hidden rounded-md border border-border bg-elevated ${
+            shown === null ? "animate-pulse motion-reduce:animate-none" : ""
+          }`}
+        >
+          {shown !== null && (
+            /* eslint-disable-next-line @next/next/no-img-element -- signed Meshy PNG or an inline data URL; next/image optimizes neither */
+            <img
+              key={artifact.stage}
+              data-testid="lightbox-image"
+              src={shown}
+              alt={`${artifact.label} stage mesh, enlarged`}
+              draggable={false}
+              className="size-full object-contain transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
+            />
+          )}
         </span>
 
         <div className="flex items-center justify-between gap-3">
@@ -513,9 +583,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
 }
 ```
 
-Note on the `<img>` source: when a stage has no `thumbnailUrl` the component points at the proxied GLB, which will not decode as an image — Task 4 replaces that fallback with a real 512px render. Leaving it here keeps this task's diff to the dialog itself.
-
-- [ ] **Step 5: Restructure the row and wire the rail**
+- [ ] **Step 6: Restructure the row and wire the rail**
 
 In `components/pipeline/stage-rail.tsx`:
 
@@ -608,20 +676,30 @@ Render the dialog as the last child of the outer `<div data-testid="stage-list">
 
 `useState` is already imported in this file.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `npx playwright test tests/stage-rail.spec.ts`
 Expected: PASS — the three new `enlarge:` tests plus the three pre-existing rail tests.
 
 If the geometry assertion fails, read the reported x/y delta before changing `right-5`: a nonzero **x** delta means the offset is wrong, a nonzero **y** delta means the container lost `items-center`.
 
-- [ ] **Step 7: Verify and commit**
+- [ ] **Step 8: Manual check of the snapshot fallback**
+
+Every Playwright fixture sets `thumbnailUrl`, so the automated tests only exercise the `<img>` path. Check the other one by hand: temporarily set `thumbnailUrl: null` in `succeededStage` in `tests/stage-rail.spec.ts`, run
+
+```
+npx playwright test tests/stage-rail.spec.ts -g "opens the lightbox" --headed
+```
+
+and confirm the reserved box pulses rather than showing a broken-image icon, and that nothing throws. The fixture GLB URL does not resolve, so it settles empty — the point is that the failure is graceful. **Revert the fixture edit before committing.**
+
+- [ ] **Step 9: Verify and commit**
 
 Run: `npm run typecheck && npm run lint && npm run test && bash scripts/check-tokens.sh`
-Expected: all pass.
+Expected: all pass. Confirm `git diff` shows no leftover `thumbnailUrl: null` from Step 8.
 
 ```bash
-git add -f components/pipeline/artifact-lightbox.tsx components/pipeline/stage-rail.tsx tests/stage-rail.spec.ts
+git add -f components/pipeline/artifact-lightbox.tsx components/pipeline/artifact-thumbnail.tsx components/pipeline/stage-rail.tsx tests/stage-rail.spec.ts
 git commit -m "feat(us-08): open a stage artifact in a lightbox"
 ```
 
@@ -817,130 +895,7 @@ git commit -m "feat(us-08): step the lightbox across the mesh stages"
 
 ---
 
-### Task 4: Render the GLB fallback at a usable size
-
-Stages with no `thumbnailUrl` (runs persisted before the field existed, or tasks Meshy did not render) fall back to a WebGL snapshot taken at `SNAPSHOT_SIZE = 96`. Enlarging 96px to 640px is mush. Render once at 512 and downscale in the rail; that also sharpens the rail on hi-DPI displays.
-
-**Files:**
-- Modify: `components/pipeline/artifact-thumbnail.tsx:30`
-- Modify: `components/pipeline/artifacts.ts` (carry the fallback snapshot, not the GLB, to the lightbox)
-- Modify: `components/pipeline/artifact-lightbox.tsx` (stop pointing `<img src>` at a GLB)
-- Test: `tests/unit/artifacts.test.ts`
-
-**Interfaces:**
-- Consumes: `MeshArtifact` from Task 1.
-- Produces: `export function snapshotGlb(url: string): Promise<string>` — promoted from a module-private function in `artifact-thumbnail.tsx` to an exported one so the lightbox can reuse the shared renderer and its serialized queue.
-
-- [ ] **Step 1: Raise the snapshot size**
-
-In `components/pipeline/artifact-thumbnail.tsx`, change line 30:
-
-```ts
-// 512, not the rail's display size: the same snapshot backs US-08's lightbox
-// at up to 640px, and upscaling a 96px render is mush. One-shot cost, and the
-// rail's 32px slot gets a sharper downscale on hi-DPI displays for free.
-const SNAPSHOT_SIZE = 512;
-```
-
-Export the function so the lightbox shares the one renderer and its queue:
-
-```ts
-export async function snapshotGlb(url: string): Promise<string> {
-```
-
-- [ ] **Step 2: Write the failing test**
-
-The lightbox must never receive a `.glb` as an image source. Append to `tests/unit/artifacts.test.ts`:
-
-```ts
-  it("never offers a GLB as an image source", () => {
-    const artifacts = meshArtifacts(runWith({ preview: { credits: 20, thumb: null } }));
-    for (const artifact of artifacts) {
-      expect(artifact.imageUrl?.endsWith(".glb") ?? false).toBe(false);
-    }
-  });
-```
-
-- [ ] **Step 3: Run the test to verify it passes already**
-
-Run: `npm run test -- tests/unit/artifacts.test.ts`
-Expected: PASS — `imageUrl` is null in the fallback case, which is the contract this test pins. It guards the next step.
-
-- [ ] **Step 4: Render the fallback inside the lightbox**
-
-In `components/pipeline/artifact-lightbox.tsx`, replace the `src={artifact.imageUrl ?? artifact.modelUrl}` fallback with an on-demand snapshot. Add above the return:
-
-```tsx
-  // No pre-rendered PNG (legacy run, or a task Meshy never rendered): take a
-  // one-shot 512px snapshot through the shared offscreen renderer. Same path
-  // the rail uses, same serialized queue — never a GLB in an <img src>.
-  const [fallback, setFallback] = useState<string | null>(null);
-  // Null whenever a real PNG exists (or the index is out of range), which is
-  // also the effect's guard — one expression, no unused intermediate.
-  const snapshotSource =
-    artifact !== undefined && artifact.imageUrl === null ? artifact.modelUrl : null;
-
-  useEffect(() => {
-    if (snapshotSource === null) return;
-    let cancelled = false;
-    void snapshotGlb(snapshotSource)
-      .then((dataUrl) => {
-        if (!cancelled) setFallback(dataUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setFallback(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [snapshotSource]);
-```
-
-Import it: `import { snapshotGlb } from "./artifact-thumbnail";`
-
-Change the image source and give the box a loading state:
-
-```tsx
-  const shown = artifact.imageUrl ?? fallback;
-```
-
-```tsx
-          <span className={`relative block aspect-square min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-elevated ${shown === null ? "animate-pulse motion-reduce:animate-none" : ""}`}>
-            {shown !== null && (
-              /* eslint-disable-next-line @next/next/no-img-element -- signed Meshy PNG or an inline data URL; next/image optimizes neither */
-              <img
-                key={artifact.stage}
-                data-testid="lightbox-image"
-                src={shown}
-                alt={`${artifact.label} stage mesh, enlarged`}
-                draggable={false}
-                className="size-full object-contain transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
-              />
-            )}
-          </span>
-```
-
-Note: the `if (artifact === undefined) return null` guard must move *below* the hooks — React requires an unconditional hook order. Keep the early return immediately before the `return createPortal(...)`, and let `artifact?.` guard the hook bodies as written above.
-
-- [ ] **Step 5: Verify**
-
-Run: `npm run typecheck && npm run lint && npm run test && npx playwright test tests/stage-rail.spec.ts`
-Expected: all pass. The Playwright fixtures all set `thumbnailUrl`, so they exercise the `<img>` path; the snapshot path is covered by the unit contract plus the manual check below.
-
-- [ ] **Step 6: Manual check of the fallback path**
-
-Temporarily set `thumbnailUrl: null` in `succeededStage` in `tests/stage-rail.spec.ts`, run `npx playwright test tests/stage-rail.spec.ts -g "opens the lightbox" --headed`, and confirm the box pulses and then settles (the fixture GLB URL does not resolve, so it settles empty — the point is that no broken-image icon and no crash appear). Revert the edit before committing.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add -f components/pipeline/artifact-thumbnail.tsx components/pipeline/artifact-lightbox.tsx tests/unit/artifacts.test.ts
-git commit -m "feat(us-08): render the GLB fallback at 512 for the lightbox"
-```
-
----
-
-### Task 5: The preview gate opens the same lightbox
+### Task 4: The preview gate opens the same lightbox
 
 The gate is the moment a human is asked to judge a mesh with 35 credits riding on it. Its image is not inside a button, so it becomes the button directly — no sibling-overlay trick needed.
 
@@ -1073,7 +1028,7 @@ git commit -m "feat(us-08): enlarge the preview gate's review image"
 
 ---
 
-### Task 6: Accessibility scan and final verification
+### Task 5: Accessibility scan and final verification
 
 **Files:**
 - Modify: `tests/a11y.spec.ts`
