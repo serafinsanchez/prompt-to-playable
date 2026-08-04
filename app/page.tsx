@@ -1,13 +1,7 @@
 "use client";
 
 import { useGLTF } from "@react-three/drei";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-  useTransition,
-} from "react";
+import { useMemo, useState, useTransition } from "react";
 import { GalleryStrip } from "@/components/gallery/gallery-strip";
 import type { GalleryEntry } from "@/scripts/pregen/manifest";
 import { useGallery } from "@/components/gallery/use-gallery";
@@ -15,10 +9,7 @@ import { generatedCharacterSource } from "@/components/pipeline/completion";
 import { LivePipeline } from "@/components/pipeline/live-pipeline";
 import { usePipeline } from "@/components/pipeline/use-pipeline";
 import { CLIP_NAMES, type CharacterSource } from "@/components/scene/clip-binding";
-import { MOVEMENT_KEY_CODES } from "@/components/scene/controls";
 import { Playground } from "@/components/scene/playground";
-
-const HINT_STORAGE_KEY = "ptp-hint-dismissed";
 
 const HINT_KEYS: Array<[keys: string, does: string]> = [
   ["wasd", "walk"],
@@ -27,46 +18,12 @@ const HINT_KEYS: Array<[keys: string, does: string]> = [
   ["e", "wave"],
 ];
 
-/**
- * The 15-second bet (PRD metric): no instructions, one mono line that
- * fades on first movement and stays gone for the session.
- */
-const noopSubscribe = () => () => {};
-
+/** Always-visible movement legend — stays put so visitors never lose the map. */
 function ControlHint() {
-  // Server snapshot says "seen" so returning visitors never get a flash.
-  const seenThisSession = useSyncExternalStore(
-    noopSubscribe,
-    () => sessionStorage.getItem(HINT_STORAGE_KEY) !== null,
-    () => true,
-  );
-  const [phase, setPhase] = useState<"shown" | "fading" | "gone">("shown");
-
-  useEffect(() => {
-    if (seenThisSession || phase !== "shown") return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!MOVEMENT_KEY_CODES.has(event.code)) return;
-      sessionStorage.setItem(HINT_STORAGE_KEY, "1");
-      setPhase("fading");
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [seenThisSession, phase]);
-
-  useEffect(() => {
-    if (phase !== "fading") return;
-    const timer = setTimeout(() => setPhase("gone"), 260);
-    return () => clearTimeout(timer);
-  }, [phase]);
-
-  if (seenThisSession || phase === "gone") return null;
-
   return (
     <div
       data-testid="control-hint"
-      className={`pointer-events-none absolute inset-x-0 bottom-4 flex justify-center transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none sm:bottom-8 ${
-        phase === "shown" ? "opacity-100" : "opacity-0"
-      }`}
+      className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center sm:bottom-8"
     >
       <p className="flex flex-wrap items-baseline justify-center gap-x-4 gap-y-2 rounded-md bg-background/60 px-4 py-3 font-mono text-xs uppercase tracking-caps">
         {HINT_KEYS.map(([keys, does]) => (

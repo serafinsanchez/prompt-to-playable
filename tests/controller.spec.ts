@@ -3,14 +3,15 @@ import { test, expect } from "@playwright/test";
 // US-01b acceptance: keyboard input moves the character. The scene exposes
 // the knight's world position on `window.__ptpCharacterPosition` as a test
 // bridge (see controlled-character.tsx).
-test("keyboard input moves the character and fades the control hint", async ({ page }) => {
+test("keyboard input moves the character and keeps the control hint visible", async ({
+  page,
+}) => {
   await page.goto("/");
 
   // Scene + physics ready: GLBs in, controller mounted, first frames rendered.
   await expect(page.getByTestId("scene-loading")).toHaveCount(0, { timeout: 120_000 });
   await page.waitForFunction(() => window.__ptpCharacterPosition !== undefined);
 
-  // Cold visitors get the control hint before they touch anything.
   await expect(page.getByTestId("control-hint")).toBeVisible();
 
   const before = await page.evaluate(() => [...window.__ptpCharacterPosition!]);
@@ -25,8 +26,8 @@ test("keyboard input moves the character and fades the control hint", async ({ p
   // Still on the stage — never fallen through the floor (US-01b req 4).
   expect(after[1]).toBeGreaterThan(-0.5);
 
-  // First movement dismisses the hint for the rest of the session.
-  await expect(page.getByTestId("control-hint")).toHaveCount(0);
+  // Legend stays up after movement so visitors never lose the key map.
+  await expect(page.getByTestId("control-hint")).toBeVisible();
 });
 
 test("jump lifts the character off the ground", async ({ page }) => {

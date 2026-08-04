@@ -19,7 +19,7 @@ export const MAX_PROMPT_LENGTH = 600;
  * the framing from cropping at the waist.
  */
 export const CHARACTER_SCAFFOLD =
-  "full body game character, standing in a neutral pose, facing forward, symmetrical, empty hands, no held objects";
+  "full body game character, standing in a neutral pose, symmetrical, empty hands, no held objects, low-poly, game ready";
 
 /** User prompt + scaffold, capped at 600 chars — the scaffold always survives. */
 export function scaffoldPrompt(prompt: string): string {
