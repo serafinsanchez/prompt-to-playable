@@ -81,13 +81,14 @@ function GalleryDownloads({ entry }: { entry: GalleryEntry }) {
               <a
                 href={item.url}
                 download={item.filename}
+                title={item.label}
                 data-testid={`gallery-download-${item.filename}`}
                 className="group flex items-baseline justify-between gap-3 rounded-sm px-1 py-1 font-mono text-xs text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
               >
                 <span className="shrink-0 text-foreground group-hover:text-accent">
                   {item.shortName}
                 </span>
-                <span className="truncate">{item.label}</span>
+                <span className="min-w-0 break-words text-right">{item.label}</span>
               </a>
             </li>
           ))}

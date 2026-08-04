@@ -23,7 +23,9 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 29015
+    "polyCount": 29015,
+    "gameReadyPath": "/gallery/knight/character.d5e76e38.glb",
+    "gameReadySizeBytes": 3256912
   },
   {
     "slug": "robot-butler",
@@ -49,7 +51,9 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 58814
+    "polyCount": 58814,
+    "gameReadyPath": "/gallery/robot-butler/character.5d6d0101.glb",
+    "gameReadySizeBytes": 3396956
   },
   {
     "slug": "goblin-scout",
@@ -75,7 +79,9 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 55494
+    "polyCount": 55494,
+    "gameReadyPath": "/gallery/goblin-scout/character.15fe036d.glb",
+    "gameReadySizeBytes": 3161912
   },
   {
     "slug": "astronaut",
@@ -101,7 +107,9 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 56800
+    "polyCount": 56800,
+    "gameReadyPath": "/gallery/astronaut/character.298105b8.glb",
+    "gameReadySizeBytes": 3108416
   },
   {
     "slug": "shield-maiden",
@@ -127,7 +135,9 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 56383
+    "polyCount": 56383,
+    "gameReadyPath": "/gallery/shield-maiden/character.de4d317a.glb",
+    "gameReadySizeBytes": 3577172
   },
   {
     "slug": "street-samurai",
@@ -153,7 +163,9 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 56796
+    "polyCount": 56796,
+    "gameReadyPath": "/gallery/street-samurai/character.727c00dc.glb",
+    "gameReadySizeBytes": 3178376
   },
   {
     "slug": "clockwork-puppet",
@@ -179,7 +191,9 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 55805
+    "polyCount": 55805,
+    "gameReadyPath": "/gallery/clockwork-puppet/character.707b92a7.glb",
+    "gameReadySizeBytes": 3424024
   },
   {
     "slug": "desert-ranger",
@@ -205,6 +219,8 @@
       "animate:jump": 3,
       "animate:emote": 3
     },
-    "polyCount": 53720
+    "polyCount": 53720,
+    "gameReadyPath": "/gallery/desert-ranger/character.aaa21852.glb",
+    "gameReadySizeBytes": 2761128
   }
 ]

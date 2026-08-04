@@ -11,9 +11,13 @@
     "test": "vitest run",
     "test:a11y": "playwright test tests/a11y.spec.ts",
     "check:tokens": "bash scripts/check-tokens.sh",
-    "pregen": "tsx scripts/pregen/index.ts"
+    "pregen": "tsx scripts/pregen/index.ts",
+    "pregen:gameready": "tsx scripts/pregen/gameready.ts"
   },
   "dependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.7.0",
     "@react-three/rapier": "^2.2.0",
@@ -26,9 +30,6 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4",
-    "@gltf-transform/core": "^4.4.2",
-    "@gltf-transform/extensions": "^4.4.2",
-    "@gltf-transform/functions": "^4.4.2",
     "@playwright/test": "^1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
