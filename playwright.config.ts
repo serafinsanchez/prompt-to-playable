@@ -11,6 +11,7 @@ export default defineConfig({
     "scene.spec.ts",
     "controller.spec.ts",
     "pipeline.spec.ts",
+    "stage-rail.spec.ts",
     "gallery.spec.ts",
   ],
   use: {

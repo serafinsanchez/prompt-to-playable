@@ -101,7 +101,7 @@ export default function Home() {
         onPreload={gallery.preload}
       />
 
-      {/* US-03a: live pipeline (key entry, prompt, minimal stage list) */}
+      {/* US-03a/US-03b: live pipeline (key entry, prompt, stage rail) */}
       <LivePipeline />
     </main>
   );

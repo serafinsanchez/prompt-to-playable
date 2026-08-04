@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Live-generation panel (US-03a): key entry + prompt + minimal stage list,
- * docked left over the scene. Owns the store lifecycle — hydrate on mount
- * (restores key from sessionStorage, resumes a non-terminal run from
- * localStorage) and ticker cleanup on unmount. Terminal runs get a
+ * Live-generation panel (US-03a shell + US-03b rail): key entry + prompt +
+ * the stage rail, docked left over the scene. Owns the store lifecycle —
+ * hydrate on mount (restores key from sessionStorage, resumes a non-terminal
+ * run from localStorage) and ticker cleanup on unmount. Terminal runs get a
  * "start over" affordance that calls clearRun via the store.
  */
 
@@ -12,7 +12,7 @@ import { useEffect } from "react";
 import { KeyEntry } from "./key-entry";
 import { PromptBar } from "./prompt-bar";
 import { RunReadout } from "./run-readout";
-import { StageList } from "./stage-list";
+import { StageRail } from "./stage-rail";
 import { pipelineStore, usePipeline } from "./use-pipeline";
 
 export function LivePipeline() {
@@ -30,7 +30,7 @@ export function LivePipeline() {
       aria-label="Live generation"
       data-testid="live-pipeline"
       // Docks left on desktop, bottom-sheet on small screens (DESIGN.md layout).
-      className="fixed inset-x-0 bottom-0 flex max-h-[60dvh] flex-col gap-4 overflow-y-auto rounded-t-lg border border-border bg-surface p-4 md:absolute md:inset-x-auto md:bottom-auto md:left-6 md:top-24 md:max-h-none md:w-80 md:overflow-visible md:rounded-lg"
+      className="fixed inset-x-0 bottom-0 flex max-h-[60dvh] flex-col gap-4 overflow-y-auto rounded-t-lg border border-border bg-surface p-4 md:absolute md:inset-x-auto md:bottom-auto md:left-6 md:top-24 md:max-h-[calc(100dvh-8rem)] md:w-80 md:overflow-y-auto md:rounded-lg"
     >
       <h2 className="font-mono text-xs uppercase tracking-caps text-muted">
         Generate your own
@@ -42,7 +42,7 @@ export function LivePipeline() {
       {run !== null && (
         <>
           <RunReadout />
-          <StageList />
+          <StageRail />
           {terminal && (
             <button
               type="button"

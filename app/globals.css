@@ -45,4 +45,7 @@
   --duration-fast: 120ms;
   --duration-normal: 220ms;
   --duration-slow: 380ms;
+  /* Ambient wait-loop (queued rings, loading thumbs) on the brand curve —
+     an exemption from the 400ms cap, like the idle animation (content). */
+  --animate-pulse: pulse 1.8s var(--ease-stage) infinite;
 }
