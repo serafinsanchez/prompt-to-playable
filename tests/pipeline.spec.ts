@@ -230,3 +230,60 @@ test("enlarge: focus stays inside the lightbox across a live poll re-render", as
   expect(events).toEqual([]);
 });
 
+// US-08 task 3 regression: the focus-trap effect's dependency array held
+// `total` (the landed-artifact count) directly. React reruns an effect
+// whenever a value in its dependency array changes, so a stage landing while
+// the dialog is open — the exact scenario this pipeline keeps polling
+// toward — reran the effect: cleanup refocused the stale "opener" (the
+// enlarge button behind the scrim, still mounted and focusable), then setup
+// snapped focus to close, silently discarding wherever the visitor had
+// actually tabbed to. The fix reads the count through `totalRef` (same
+// pattern as `onCloseRef`) so the effect stays mount/unmount-only. This is
+// the read side of that fix: open the dialog with two stages already landed,
+// tab to `lightbox-next`, then wait for the count to grow again the same way
+// the test above waits for a real store re-render — no fixed sleep.
+test("enlarge: a landing stage while the dialog is open does not steal focus off the arrow", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await page.goto("/");
+  await page.getByTestId("key-input").fill(TEST_MODE_KEY);
+  await page.getByTestId("prompt-input").fill("a bronze knight with a tower shield");
+  await page.getByTestId("pipeline-start").click();
+
+  await expect(page.getByTestId("preview-gate")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("gate-approve").click();
+  await expect(page.getByTestId("preview-gate")).toHaveCount(0);
+
+  // Two mesh stages landed before the dialog even opens, so `lightbox-next`
+  // starts out enabled (index 0 of 2) and is reachable via the trap's Tab
+  // wrap without a disabled `lightbox-prev` in the way.
+  await expect(page.getByTestId("stage-row-refine")).toHaveAttribute("data-kind", "succeeded", {
+    timeout: 120_000,
+  });
+
+  await page.getByTestId("enlarge-preview").click();
+  const dialog = page.getByTestId("artifact-lightbox");
+  await expect(dialog).toBeVisible();
+  const dots = page.getByTestId("lightbox-dots").locator("[data-dot]");
+  await expect(dots).toHaveCount(2);
+  await expect(page.getByTestId("lightbox-next")).toBeEnabled();
+
+  // The mount effect auto-focuses close. At index 0, `lightbox-prev` is
+  // disabled and excluded from the trap's query, so Tab from close (last
+  // enabled control) wraps to `lightbox-next` (first) — same wrap this file
+  // already exercises with a seeded fixture in stage-rail.spec.ts.
+  await expect(page.getByTestId("lightbox-close")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("lightbox-next")).toBeFocused();
+
+  // Wait for remesh to land — a third mesh artifact, a real store re-render,
+  // not elapsed time. This is the moment the bug fired: the count changing
+  // reran the effect and reset focus to close.
+  await expect(dots).toHaveCount(3, { timeout: 120_000 });
+
+  // Still open, and focus is still exactly where the visitor left it.
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId("lightbox-next")).toBeFocused();
+});
+

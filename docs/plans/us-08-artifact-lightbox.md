@@ -798,7 +798,16 @@ In `components/pipeline/artifact-lightbox.tsx`, add a step helper above the effe
   };
 ```
 
-`step` is recreated every render, so keep it out of the effect's dependency list by handling the arrow keys through a ref-free inline branch inside `onKeyDown` that calls `setIndex` directly. Replace the `Escape` branch of `onKeyDown` with:
+The focus-trap effect must stay mount-only. Do NOT add `onClose`, `artifacts`, or the artifact count to its dependency array: the effect captures `document.activeElement` as the opener on setup and calls `opener?.focus()` on cleanup, so *any* rerun yanks focus out of a still-open dialog and discards the visitor's tab position. `onClose` changes identity every ~4s poll; the artifact count changes whenever a stage lands. Both are live triggers during the exact scenario this feature exists for.
+
+Read the count through a ref instead, updated during render alongside the existing `onCloseRef`:
+
+```tsx
+  const totalRef = useRef(artifacts.length);
+  totalRef.current = artifacts.length;
+```
+
+Then replace the `Escape` branch of `onKeyDown` with:
 
 ```tsx
       if (event.key === "Escape") {
@@ -807,18 +816,12 @@ In `components/pipeline/artifact-lightbox.tsx`, add a step helper above the effe
       }
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         const delta = event.key === "ArrowRight" ? 1 : -1;
-        setIndex((current) => Math.min(Math.max(current + delta, 0), total - 1));
+        setIndex((current) => Math.min(Math.max(current + delta, 0), totalRef.current - 1));
         return;
       }
 ```
 
-and capture the count once before the effect so the dependency is a number, not an array identity:
-
-```tsx
-  const total = artifacts.length;
-```
-
-Add `total` to the effect's dependency array: `[onClose, total]`.
+Leave the effect's dependency array as `[]`. The ref keeps the count current without ever rerunning the effect, which is the whole point — see the note above.
 
 Add the arrows either side of the image, inside the frame `<div>`, replacing the bare `<span className="relative block aspect-square …">` wrapper with a row:
 

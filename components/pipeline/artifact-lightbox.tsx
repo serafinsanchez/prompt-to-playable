@@ -16,10 +16,16 @@
  * is active. If the focus-trap effect below depended on `onClose` directly,
  * it would tear down and rebuild on every tick — yanking focus out to the
  * opener and back in, visibly, while the dialog is open. `onClose` is read
- * through a ref instead, so the effect's dependency array holds only `total`
- * (the artifact count, a stable number) — never `onClose` or `artifacts`
- * itself — and setup / teardown happen only on true mount/unmount or when
- * the count changes.
+ * through a ref instead, so the effect's dependency array is `[]` and setup
+ * / teardown happen only on true mount / unmount.
+ *
+ * The artifact count that clamps stepping has the same problem: a stage
+ * landing while the dialog is open (the run keeps polling) grows `artifacts`,
+ * so if the effect depended on the count directly it would rerun on landing
+ * too — recapturing `document.activeElement` as the "opener" and refocusing
+ * close, silently discarding wherever the visitor had actually tabbed to.
+ * The count is read through `totalRef` instead, kept current by its own
+ * no-deps effect, for the same reason `onClose` goes through a ref.
  *
  * Hand-rolled focus trap — no new packages (CLAUDE.md). DESIGN.md forbids
  * backdrop-blur and shadows: the scrim is a flat tint, depth is the elevated
@@ -83,10 +89,14 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
     setIndex((current) => Math.min(Math.max(current + delta, 0), artifacts.length - 1));
   };
 
-  // Captured once per render so the focus-trap effect's dependency below is a
-  // number, not the `artifacts` array identity — see the file header for why
-  // that effect can't take per-render values directly.
-  const total = artifacts.length;
+  // Always the latest artifact count, read by the mount-only effect below —
+  // see the file header. Same pattern as onCloseRef: React forbids writing a
+  // ref during render, so it's updated in its own no-deps effect (runs after
+  // every render) instead.
+  const totalRef = useRef(artifacts.length);
+  useEffect(() => {
+    totalRef.current = artifacts.length;
+  });
 
   useEffect(() => {
     const node = dialogRef.current;
@@ -102,7 +112,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
       }
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         const delta = event.key === "ArrowRight" ? 1 : -1;
-        setIndex((current) => Math.min(Math.max(current + delta, 0), total - 1));
+        setIndex((current) => Math.min(Math.max(current + delta, 0), totalRef.current - 1));
         return;
       }
       if (event.key !== "Tab" || node === null) return;
@@ -124,10 +134,8 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
       document.removeEventListener("keydown", onKeyDown);
       opener?.focus();
     };
-    // Mount/unmount plus artifact-count changes only — see file header and
-    // the onCloseRef comment above. `total` is a number, stable across
-    // re-renders where the `artifacts` array identity is not.
-  }, [total]);
+    // Mount/unmount only — see file header and the onCloseRef comment above.
+  }, []);
 
   // Every hook above runs unconditionally — React requires stable hook order,
   // so this guard cannot move up.
