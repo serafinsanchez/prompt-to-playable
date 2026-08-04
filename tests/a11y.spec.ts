@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { STORAGE_KEY as RUN_STORAGE_KEY, STORAGE_VERSION } from '../lib/meshy/storage';
 
 // Edit this list to cover your key routes.
 const ROUTES = ['/'];
@@ -72,4 +73,92 @@ for (const route of ROUTES) {
       expect(missingIndicator, `Focusable element has no visible focus indicator: ${missingIndicator}`).toBeNull();
     });
   }
+}
+
+// US-08: the lightbox only exists after a click, so the route-level scans
+// above never see it. Seed a run with two landed mesh stages, open the dialog,
+// and scan the page in that state.
+const LIGHTBOX_VIEWPORTS = [
+  { name: 'mobile', width: 375, height: 667 },
+  { name: 'desktop', width: 1280, height: 720 },
+];
+
+for (const viewport of LIGHTBOX_VIEWPORTS) {
+  test(`a11y: artifact lightbox @ ${viewport.name}`, async ({ page }) => {
+    const now = Date.now();
+    const stage = (id: string, credits: number) => ({
+      status: 'succeeded',
+      taskId: id,
+      progress: 100,
+      precedingTasks: null,
+      creditCost: credits,
+      modelUrl: `https://assets.meshy.test/${id}.glb`,
+      thumbnailUrl:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGO48kIbK2IYWhIAvMl5wfWTQdgAAAAASUVORK5CYII=',
+      startedAt: now - 300_000,
+      completedAt: now - 218_000,
+      error: null,
+    });
+    const pending = (id: string) => ({
+      stage: id,
+      status: 'pending',
+      taskId: null,
+      progress: 0,
+      precedingTasks: null,
+      creditCost: null,
+      modelUrl: null,
+      thumbnailUrl: null,
+      startedAt: null,
+      completedAt: null,
+      error: null,
+    });
+    const run = {
+      prompt: 'a bronze knight with a tower shield',
+      status: 'running',
+      stages: {
+        preview: { ...pending('preview'), ...stage('preview-0001', 20) },
+        refine: { ...pending('refine'), ...stage('refine-0002', 10) },
+        remesh: pending('remesh'),
+        rig: pending('rig'),
+        'animate:idle': pending('animate:idle'),
+        'animate:walk': pending('animate:walk'),
+        'animate:run': pending('animate:run'),
+        'animate:jump': pending('animate:jump'),
+        'animate:emote': pending('animate:emote'),
+      },
+      startedAt: now - 300_000,
+      completedAt: null,
+      creditsSpent: 30,
+      waitingForQueue: false,
+      rateLimitBackoffMs: null,
+      nextPollAt: null,
+    };
+
+    await page.addInitScript(
+      ([key, envelope]) => {
+        window.localStorage.setItem(key, envelope);
+      },
+      [RUN_STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, run })] as const,
+    );
+
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('enlarge-preview').click();
+    await expect(page.getByTestId('artifact-lightbox')).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+
+    if (results.violations.length > 0) {
+      console.error(
+        `\n❌ a11y violations with the lightbox open @ ${viewport.name}:\n` +
+          JSON.stringify(results.violations, null, 2),
+      );
+    }
+
+    expect(results.violations).toEqual([]);
+  });
 }

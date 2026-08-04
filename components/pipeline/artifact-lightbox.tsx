@@ -159,7 +159,7 @@ export function ArtifactLightbox({ artifacts, initialIndex, onClose }: ArtifactL
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className="flex w-full max-w-[min(80vw,640px)] flex-col gap-3 transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
+        className="flex w-full max-w-[min(80vw,640px)] flex-col gap-3 rounded-md border border-border bg-elevated p-3 transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
       >
         <div className="flex items-center gap-3">
           <button
