@@ -30,3 +30,4 @@ docs/
 
 # session worktrees (harness-managed)
 .claude/worktrees/
+.claude/hooks/state/
