@@ -6,7 +6,13 @@ const port = Number(process.env.PORT ?? 3000);
 
 export default defineConfig({
   testDir: "tests",
-  testMatch: ["a11y.spec.ts", "scene.spec.ts", "controller.spec.ts", "pipeline.spec.ts"],
+  testMatch: [
+    "a11y.spec.ts",
+    "scene.spec.ts",
+    "controller.spec.ts",
+    "pipeline.spec.ts",
+    "gallery.spec.ts",
+  ],
   use: {
     baseURL: `http://localhost:${port}`,
   },

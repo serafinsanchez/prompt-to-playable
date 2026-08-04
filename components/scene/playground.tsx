@@ -86,9 +86,11 @@ function LoadingVeil() {
 /**
  * The full-bleed playground stage (ARCHITECTURE §3): dark stage, one
  * playable character, idle always playing. Fills its nearest positioned
- * ancestor. ecctrl owns the camera from first frame (US-01b).
+ * ancestor. ecctrl owns the camera from first frame (US-01b). `character`
+ * is null only while the gallery manifest resolves (US-02) — the stage
+ * renders and the knight drops in the moment a source exists.
  */
-export function Playground({ character }: { character: CharacterSource }) {
+export function Playground({ character }: { character: CharacterSource | null }) {
   return (
     <div className="absolute inset-0">
       <Canvas
@@ -101,7 +103,7 @@ export function Playground({ character }: { character: CharacterSource }) {
           <Suspense fallback={null}>
             {/* Fixed timestep: GLB-parse frame stalls must not tunnel the capsule through the floor. */}
             <Physics>
-              <ControlledCharacter source={character} />
+              {character && <ControlledCharacter source={character} />}
             </Physics>
           </Suspense>
         </KeyboardControls>

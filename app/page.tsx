@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { GalleryStrip } from "@/components/gallery/gallery-strip";
+import { useGallery } from "@/components/gallery/use-gallery";
 import { LivePipeline } from "@/components/pipeline/live-pipeline";
-import { DEFAULT_CHARACTER } from "@/components/scene/default-character";
 import { MOVEMENT_KEY_CODES } from "@/components/scene/controls";
 import { Playground } from "@/components/scene/playground";
 
@@ -71,9 +72,11 @@ function ControlHint() {
 }
 
 export default function Home() {
+  const gallery = useGallery();
+
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      <Playground character={DEFAULT_CHARACTER} />
+      <Playground character={gallery.source} />
 
       {/* Thin overlay chrome — the scene is the hero (DESIGN.md). */}
       <header className="pointer-events-none absolute inset-x-0 top-0">
@@ -88,6 +91,15 @@ export default function Home() {
       </header>
 
       <ControlHint />
+
+      {/* US-02: browse the pregen gallery, swap the stage character in place */}
+      <GalleryStrip
+        status={gallery.status}
+        activeSlug={gallery.activeSlug ?? ""}
+        pendingSlug={gallery.pendingSlug}
+        onSelect={gallery.select}
+        onPreload={gallery.preload}
+      />
 
       {/* US-03a: live pipeline (key entry, prompt, minimal stage list) */}
       <LivePipeline />

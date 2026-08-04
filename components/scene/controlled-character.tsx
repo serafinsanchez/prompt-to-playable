@@ -24,6 +24,8 @@ declare global {
   interface Window {
     /** Test bridge: the knight's world position, updated every frame (Playwright reads it). */
     __ptpCharacterPosition?: [number, number, number];
+    /** Test bridge: rig URL of the character currently on stage (set once its GLBs are bound). */
+    __ptpCharacterRig?: string;
   }
 }
 
@@ -93,6 +95,11 @@ function CharacterBody({ source }: { source: CharacterSource }) {
   useEffect(() => {
     useGame.getState().initializeAnimationSet(ANIMATION_SET);
   }, []);
+
+  // Gallery swaps (US-02) assert against this — it flips only after the new rig is bound.
+  useEffect(() => {
+    window.__ptpCharacterRig = source.rig;
+  }, [source]);
 
   // ecctrl only fires action1 from gamepads — wire the emote key ourselves.
   // The store gates it to idle, so movement naturally blocks the wave.
