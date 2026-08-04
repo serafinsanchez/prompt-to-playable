@@ -8,7 +8,7 @@
 | 2 | `[ ]` | infra | TASK-07: Performance + accessibility budget pass | [task-07-perf-a11y-budget.md](../specs/task-07-perf-a11y-budget.md) |
 | 3 | `[x]` | infra | TASK-08: README as landing page + repo publish (repo already public under final name) | [task-08-readme-landing-publish.md](../specs/task-08-readme-landing-publish.md) |
 | 4 | `[ ]` | infra | TASK-09: Demo video (2–3 min), ready to publish | [task-09-demo-video.md](../specs/task-09-demo-video.md) |
-| 5 | `[ ]` | infra | TASK-10: Distribution plan + submission bundle | [task-10-distribution-submission.md](../specs/task-10-distribution-submission.md) |
+| 5 | `[~]` | infra | TASK-10: Distribution plan + submission bundle | [task-10-distribution-submission.md](../specs/task-10-distribution-submission.md) |
 | 6 | `[x]` | ui | US-08: Enlarge a stage's mesh artifact (lightbox) | [us-08-artifact-lightbox.md](../specs/us-08-artifact-lightbox.md) |
 | 7 | `[x]` | ui | US-09: "Explore more in the API Playground" CTA on the completion card | [us-09-playground-cta.md](../specs/us-09-playground-cta.md) |
 | 8 | `[ ]` | ui | US-10: Download the character as one game-ready GLB | [us-10-game-ready-glb.md](../specs/us-10-game-ready-glb.md) |
