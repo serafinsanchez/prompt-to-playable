@@ -36,6 +36,7 @@ function StageEnvironment() {
   useEffect(() => {
     const pmrem = new PMREMGenerator(gl);
     const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    // eslint-disable-next-line react-hooks/immutability -- three's Scene is a mutable external object; assign-in-effect with cleanup is the R3F-idiomatic way to set an environment map
     scene.environment = environment;
     scene.environmentIntensity = ENVIRONMENT_INTENSITY;
     return () => {
