@@ -188,13 +188,14 @@ export function CompletionActions({
             Explore more in the API Playground{" "}
             <span aria-hidden="true">↗</span>
           </span>
-          <span
-            key={copied ? "copied" : "hint"}
-            data-testid="playground-cta-caption"
-            className="text-muted transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
-          >
-            {copied ? "Prompt copied" : "Click copies your prompt"}
-          </span>
+          {copied && (
+            <span
+              data-testid="playground-cta-caption"
+              className="text-muted transition-opacity duration-(--duration-normal) ease-(--ease-stage) starting:opacity-0 motion-reduce:transition-none"
+            >
+              Prompt copied
+            </span>
+          )}
         </a>
       </div>
     </div>

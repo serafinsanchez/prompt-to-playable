@@ -207,9 +207,7 @@ test("completion card links out to the API playground", async ({ page }) => {
   );
   await expect(cta).toHaveAttribute("target", "_blank");
   await expect(cta).toHaveAttribute("rel", "noopener");
-  await expect(page.getByTestId("playground-cta-caption")).toHaveText(
-    "Click copies your prompt",
-  );
+  await expect(page.getByTestId("playground-cta-caption")).toHaveCount(0);
 });
 
 // Clipboard APIs need explicit permissions (Chromium) — scoped to this block.
