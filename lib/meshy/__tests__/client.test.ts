@@ -9,7 +9,10 @@ import {
   PREVIEW_SHOULD_REMESH,
   PREVIEW_TARGET_POLYCOUNT,
   PREVIEW_TOPOLOGY,
-  REFINE_TEXTURE_PROMPT,
+  buildRefineTexturePrompt,
+  REFINE_TEXTURE_STEER,
+  REFINE_TEXTURE_RESOLUTION,
+  REFINE_REMOVE_LIGHTING,
   REMESH_PATH,
   RIGGING_PATH,
   taskGlbUrl,
@@ -57,17 +60,22 @@ describe("createMeshyClient", () => {
     });
     const client = createMeshyClient(transport);
 
-    const taskId = await client.createRefineTask("preview-0001");
+    const taskId = await client.createRefineTask("preview-0001", "a brave knight");
 
     expect(taskId).toBe("refine-0002");
     expect(calls[0]!.body).toEqual({
       mode: "refine",
       preview_task_id: "preview-0001",
       enable_pbr: true,
-      texture_prompt: REFINE_TEXTURE_PROMPT,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      texture_resolution: REFINE_TEXTURE_RESOLUTION,
+      remove_lighting: REFINE_REMOVE_LIGHTING,
+      texture_prompt: buildRefineTexturePrompt("a brave knight"),
     });
     // Generative texturing can't spell — steer it away from lettering.
-    expect(REFINE_TEXTURE_PROMPT).toMatch(/no text/);
+    expect(REFINE_TEXTURE_STEER).toMatch(/no text/);
+    expect(REFINE_TEXTURE_RESOLUTION).toBe("4k");
+    expect(REFINE_REMOVE_LIGHTING).toBe(true);
   });
 
   it("getTextTo3DTask GETs the v2 task by id", async () => {

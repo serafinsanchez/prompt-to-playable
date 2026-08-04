@@ -12,7 +12,15 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createMeshyClient, REMESH_PATH, RIGGING_PATH, ANIMATIONS_PATH, TEXT_TO_3D_PATH } from "../../lib/meshy/client";
+import {
+  createMeshyClient,
+  REMESH_PATH,
+  RIGGING_PATH,
+  ANIMATIONS_PATH,
+  TEXT_TO_3D_PATH,
+  buildRefineTexturePrompt,
+  REFINE_TEXTURE_STEER,
+} from "../../lib/meshy/client";
 import { makeFixtureTransport } from "../../lib/meshy/__tests__/fixtures";
 import { createPipelineStore, KEY_STORAGE_KEY, type TickScheduler } from "../../components/pipeline/store";
 import type { StorageAdapter } from "../../lib/meshy/storage";
@@ -68,7 +76,7 @@ describe("stageRequest ↔ client sync", () => {
     const run = chainedRun();
 
     await client.createPreviewTask(run.prompt);
-    await client.createRefineTask("preview-0001");
+    await client.createRefineTask("preview-0001", run.prompt);
     await client.createRemeshTask("refine-0002", REMESH_TARGET_POLYCOUNT);
     await client.createRigTask("remesh-0003");
     for (const clip of ANIMATION_CLIPS) await client.createAnimationTask("rigging-0004", clip);
@@ -212,5 +220,28 @@ describe("stage body parameter pins", () => {
       should_remesh: true,
       target_polycount: 30_000,
     });
+  });
+
+  it("refine textures at 4k with the user's prompt leading the steer", () => {
+    const body = stageRequest(chainedRun(), "refine").body;
+    expect(body).toEqual({
+      mode: "refine",
+      preview_task_id: "preview-0001",
+      enable_pbr: true,
+      ai_model: "meshy-6",
+      texture_resolution: "4k",
+      remove_lighting: true,
+      texture_prompt:
+        "a bronze knight with a tower shield, clean fabric and materials, no text, no logos, no lettering",
+    });
+  });
+
+  it("buildRefineTexturePrompt keeps the combined prompt under Meshy's 600-char cap", () => {
+    const long = "x".repeat(700);
+    const combined = buildRefineTexturePrompt(long);
+    expect(combined.length).toBeLessThanOrEqual(600);
+    expect(combined.endsWith(REFINE_TEXTURE_STEER)).toBe(true);
+    expect(combined.startsWith("xxx")).toBe(true);
+    expect(buildRefineTexturePrompt("")).toBe(REFINE_TEXTURE_STEER);
   });
 });

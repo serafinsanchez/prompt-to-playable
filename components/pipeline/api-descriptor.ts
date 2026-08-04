@@ -18,7 +18,9 @@ import {
   PREVIEW_TOPOLOGY,
   PREVIEW_SHOULD_REMESH,
   PREVIEW_TARGET_POLYCOUNT,
-  REFINE_TEXTURE_PROMPT,
+  buildRefineTexturePrompt,
+  REFINE_TEXTURE_RESOLUTION,
+  REFINE_REMOVE_LIGHTING,
   REMESH_PATH,
   RIGGING_PATH,
   TEXT_TO_3D_AI_MODEL,
@@ -75,7 +77,10 @@ export function stageRequest(run: PipelineRun, stage: StageId): StageRequest {
       mode: "refine",
       preview_task_id: taskIdOr(run, "preview", "<preview-task-id>"),
       enable_pbr: true,
-      texture_prompt: REFINE_TEXTURE_PROMPT,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      texture_resolution: REFINE_TEXTURE_RESOLUTION,
+      remove_lighting: REFINE_REMOVE_LIGHTING,
+      texture_prompt: buildRefineTexturePrompt(run.prompt),
     });
   }
   if (stage === "remesh") {

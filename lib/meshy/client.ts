@@ -38,12 +38,24 @@ export const PREVIEW_SHOULD_REMESH = true;
 export const PREVIEW_TARGET_POLYCOUNT = 30_000;
 
 /**
- * Refine texture steer: generative texturing can't spell, so any prompt that
- * implies logos or jersey lettering comes back as smudged glyphs. Sent on
- * every refine alongside the mesh prompt.
+ * Refine texture steer: generative texturing can't spell, so any prompt
+ * that implies logos or jersey lettering comes back as smudged glyphs.
+ * Appended to the user's prompt — never sent alone, or the texture pass
+ * loses the character description entirely.
  */
-export const REFINE_TEXTURE_PROMPT =
+export const REFINE_TEXTURE_STEER =
   "clean fabric and materials, no text, no logos, no lettering";
+/** docs.meshy.ai: base color resolution, default 2k. 4k is the visual ceiling worth paying for. */
+export const REFINE_TEXTURE_RESOLUTION = "4k";
+/** Delit base color (v6 default, sent explicitly) — the R3F scene does its own lighting. */
+export const REFINE_REMOVE_LIGHTING = true;
+
+/** Meshy caps texture_prompt at 600 chars; user prompt leads, steer always survives. */
+const TEXTURE_PROMPT_MAX = 600;
+export function buildRefineTexturePrompt(prompt: string): string {
+  const lead = prompt.slice(0, TEXTURE_PROMPT_MAX - REFINE_TEXTURE_STEER.length - 2);
+  return lead ? `${lead}, ${REFINE_TEXTURE_STEER}` : REFINE_TEXTURE_STEER;
+}
 export const RIGGING_PATH = "/openapi/v1/rigging";
 export const ANIMATIONS_PATH = "/openapi/v1/animations";
 export const REMESH_PATH = "/openapi/v1/remesh";
@@ -80,8 +92,8 @@ export function taskGlbUrl(task: MeshyTask): string | null {
 export interface MeshyClient {
   /** POST v2 text-to-3d { mode: "preview" } → task id. */
   createPreviewTask(prompt: string): Promise<string>;
-  /** POST v2 text-to-3d { mode: "refine", preview_task_id } with PBR → task id. */
-  createRefineTask(previewTaskId: string): Promise<string>;
+  /** POST v2 text-to-3d { mode: "refine", preview_task_id } with 4k PBR steered by the run prompt → task id. */
+  createRefineTask(previewTaskId: string, prompt: string): Promise<string>;
   getTextTo3DTask(taskId: string): Promise<MeshyTask>;
   /** POST v1 rigging chained by input_task_id → task id. */
   createRigTask(inputTaskId: string): Promise<string>;
@@ -123,12 +135,15 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
         should_remesh: PREVIEW_SHOULD_REMESH,
         target_polycount: PREVIEW_TARGET_POLYCOUNT,
       }),
-    createRefineTask: (previewTaskId) =>
+    createRefineTask: (previewTaskId, prompt) =>
       create(TEXT_TO_3D_PATH, {
         mode: "refine",
         preview_task_id: previewTaskId,
         enable_pbr: true,
-        texture_prompt: REFINE_TEXTURE_PROMPT,
+        ai_model: TEXT_TO_3D_AI_MODEL,
+        texture_resolution: REFINE_TEXTURE_RESOLUTION,
+        remove_lighting: REFINE_REMOVE_LIGHTING,
+        texture_prompt: buildRefineTexturePrompt(prompt),
       }),
     getTextTo3DTask: (taskId) => get(TEXT_TO_3D_PATH, taskId),
     createRigTask: (inputTaskId) => create(RIGGING_PATH, { input_task_id: inputTaskId }),

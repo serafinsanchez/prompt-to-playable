@@ -202,7 +202,7 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
 
   const createStageTask = (stage: StageId): Promise<string> => {
     if (stage === "preview") return client.createPreviewTask(run.prompt);
-    if (stage === "refine") return client.createRefineTask(requireTaskId("preview"));
+    if (stage === "refine") return client.createRefineTask(requireTaskId("preview"), run.prompt);
     if (stage === "remesh")
       return client.createRemeshTask(requireTaskId("refine"), REMESH_TARGET_POLYCOUNT);
     if (stage === "rig") return client.createRigTask(requireTaskId("remesh"));
