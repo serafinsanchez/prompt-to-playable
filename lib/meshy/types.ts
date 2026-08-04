@@ -107,6 +107,8 @@ export interface StageState {
   taskId: string | null;
   /** 0–100, mirrored from the Meshy task. */
   progress: number;
+  /** Queue depth while PENDING (Meshy's preceding_tasks); null once moving or absent. */
+  precedingTasks: number | null;
   /** Actual credits consumed, captured on the terminal status. */
   creditCost: number | null;
   modelUrl: string | null;

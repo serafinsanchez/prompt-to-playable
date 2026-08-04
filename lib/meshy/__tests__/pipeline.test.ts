@@ -191,6 +191,40 @@ describe("pipeline happy path", () => {
   });
 });
 
+describe("queue depth (preceding_tasks)", () => {
+  it("mirrors preceding_tasks into the stage snapshot while PENDING and clears it after", async () => {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { body: task("preview-0001", "PENDING", { preceding_tasks: 477 }) },
+        { body: task("preview-0001", "IN_PROGRESS", { progress: 12 }) },
+      ],
+    });
+
+    pipeline.start("a queued knight");
+    await pipeline.tick(); // creates the preview task
+
+    // PENDING behind 477 tasks — the rail needs this number (spike run 2:
+    // remesh sat ~2h behind ~500 tasks while actual processing took 2.5m).
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick();
+    expect(pipeline.getRun().stages.preview.precedingTasks).toBe(477);
+
+    // Once the task is IN_PROGRESS Meshy stops sending preceding_tasks —
+    // the snapshot must drop back to null, not hold a stale queue depth.
+    set(2 * POLL_INTERVAL_MS);
+    await pipeline.tick();
+    expect(pipeline.getRun().stages.preview.precedingTasks).toBeNull();
+  });
+
+  it("initializes precedingTasks as null on every stage of an empty run", () => {
+    const run = createEmptyRun("a brave knight");
+    expect(
+      Object.values(run.stages).every((stage) => stage.precedingTasks === null),
+    ).toBe(true);
+  });
+});
+
 describe("stage failure", () => {
   it("halts the run, surfaces task_error verbatim, and preserves upstream results", async () => {
     const { pipeline, calls, set } = pipelineWith({

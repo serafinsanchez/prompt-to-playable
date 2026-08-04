@@ -71,6 +71,7 @@ export function createEmptyRun(prompt: string): PipelineRun {
         status: "pending",
         taskId: null,
         progress: 0,
+        precedingTasks: null,
         creditCost: null,
         modelUrl: null,
         startedAt: null,
@@ -146,6 +147,8 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
   const applyTask = (stage: StageId, task: MeshyTask): void => {
     const state = run.stages[stage];
     state.progress = task.progress;
+    // Meshy only sends preceding_tasks while PENDING — absent means "moving".
+    state.precedingTasks = task.preceding_tasks ?? null;
     if (task.status === "SUCCEEDED") {
       state.status = "succeeded";
       // consumed_credits is authoritative; fall back to the published price.

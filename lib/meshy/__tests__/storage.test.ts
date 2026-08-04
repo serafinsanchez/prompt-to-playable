@@ -22,6 +22,7 @@ function sampleRun(): PipelineRun {
         status: stage === "preview" ? "succeeded" : stage === "refine" ? "running" : "pending",
         taskId: stage === "preview" ? "preview-0001" : stage === "refine" ? "refine-0002" : null,
         progress: stage === "preview" ? 100 : 0,
+        precedingTasks: null,
         creditCost: stage === "preview" ? 20 : null,
         modelUrl: stage === "preview" ? "https://assets.meshy.test/preview-0001.glb" : null,
         startedAt: stage === "preview" ? 1_000 : stage === "refine" ? 61_000 : null,

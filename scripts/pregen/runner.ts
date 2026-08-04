@@ -168,6 +168,7 @@ function retryableRun(run: PipelineRun): PipelineRun {
         status: "pending",
         taskId: null,
         progress: 0,
+        precedingTasks: null,
         creditCost: null,
         modelUrl: null,
         startedAt: null,
