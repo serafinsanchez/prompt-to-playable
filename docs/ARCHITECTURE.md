@@ -41,7 +41,7 @@ No persisted entities. Three client-side shapes matter:
 
 | Shape | Lives in | Purpose / key fields |
 |---|---|---|
-| `PipelineRun` | Zustand + `localStorage` | One generation attempt: `prompt`, per-stage `{taskId, status, progress, creditCost, modelUrl}` for preview / refine / rig / animate×5, timestamps. Task ids make runs resumable after refresh (Meshy chains by task id). |
+| `PipelineRun` | Zustand + `localStorage` | One generation attempt: `prompt`, per-stage `{taskId, status, progress, precedingTasks, creditCost, modelUrl}` for preview / refine / rig / animate×5, timestamps. Task ids make runs resumable after refresh (Meshy chains by task id). |
 | `GalleryEntry` | `public/gallery/manifest.json` (build-time) | `slug`, `prompt`, `glbPath`, `creditTotal`, `generationSeconds`, per-stage credit breakdown, poly count. Written by pregen script only. |
 | `MeshyTask` | transient (API responses) | Mirror of Meshy's task object: `id`, `status` (PENDING → IN_PROGRESS → SUCCEEDED/FAILED/CANCELED), `progress`, `model_urls`, `task_error`. Typed once in `lib/meshy/types.ts`. |
 
@@ -76,7 +76,7 @@ Conventions: no soft-delete, no audit, no multi-tenancy — nothing to apply the
 - Dev/CI use Meshy's test-mode key (`msy_dummy_api_key_for_test_mode_12345678`) — zero credits consumed.
 
 ### Pipeline orchestration (the load-bearing area)
-- Stage graph: `preview(20c) → refine+PBR(10c) → remesh(5c) → rig(5c) → animate ×5 clips(3c each)` = **55 credits/character**. Remesh is mandatory, not optional — refine outputs ~583k tris and rigging rejects >300k faces (day-0 spike, Trade-off log 2026-08-03). **Implementation status:** `lib/meshy/pipeline.ts` runs the full 6-stage graph (preview → refine → remesh → rig → animate ×5, 55c) as of TASK-11 — remesh is created with `target_polycount: 30000` and rig chains from the remesh task id. `STORAGE_VERSION` is 2; stale 4-stage runs are discarded on load.
+- Stage graph: `preview(20c) → refine+PBR(10c) → remesh(5c) → rig(5c) → animate ×5 clips(3c each)` = **55 credits/character**. Remesh is mandatory, not optional — refine outputs ~583k tris and rigging rejects >300k faces (day-0 spike, Trade-off log 2026-08-03). **Implementation status:** `lib/meshy/pipeline.ts` runs the full 6-stage graph (preview → refine → remesh → rig → animate ×5, 55c) as of TASK-11 — remesh is created with `target_polycount: 30000` and rig chains from the remesh task id. `STORAGE_VERSION` is 3 (v3 adds `StageState.precedingTasks` so the rail can say "queued behind N tasks" — spike finding, 2026-08-03 log entry); stale v1/v2 runs are discarded on load.
 - Chaining is always by task id (`preview_task_id` / `input_task_id` / `rig_task_id` for animations) — never download-and-reupload.
 - **Progress: poll every ~4s** through the proxy; Meshy's 0–100 `progress` field animates the stage rail. SSE consciously rejected (see Trade-off log).
 - Failure at any stage: halt pipeline, surface Meshy's `task_error` verbatim + note that failed tasks auto-refund (a DevEx teaching moment). Retry = re-run stage; upstream completed stages are reusable via stored task ids.
