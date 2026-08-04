@@ -258,6 +258,7 @@ describe("pipeline happy path", () => {
     const remeshCreate = calls.find((c) => c.key === `POST ${REMESH_PATH}`);
     expect(JSON.parse(JSON.stringify(remeshCreate!.body))).toEqual({
       input_task_id: "refine-0002",
+      topology: "quad",
       target_polycount: 30000,
     });
 

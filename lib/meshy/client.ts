@@ -76,6 +76,15 @@ export const ANIMATION_CLIP_ACTIONS: Record<AnimationClip, number> = {
 };
 
 /**
+ * Remesh defaults to TRIANGLE topology (docs.meshy.ai) — but this stage's
+ * output is what rigging skins, and quads deform far better under skinning.
+ * Requesting quad on preview alone is not enough; it must be re-asserted here.
+ */
+export const REMESH_TOPOLOGY = "quad";
+/** Explicit humanoid scale for auto-rigging (docs default 1.7m) — deterministic playground scale. */
+export const RIG_HEIGHT_METERS = 1.7;
+
+/**
  * Where a task's GLB lives depends on the endpoint family: text-to-3d (and
  * remesh) publish `model_urls.glb`; rigging and animation nest URLs under
  * `result`. One extractor so the pipeline stays shape-agnostic.
@@ -146,7 +155,8 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
         texture_prompt: buildRefineTexturePrompt(prompt),
       }),
     getTextTo3DTask: (taskId) => get(TEXT_TO_3D_PATH, taskId),
-    createRigTask: (inputTaskId) => create(RIGGING_PATH, { input_task_id: inputTaskId }),
+    createRigTask: (inputTaskId) =>
+      create(RIGGING_PATH, { input_task_id: inputTaskId, height_meters: RIG_HEIGHT_METERS }),
     getRigTask: (taskId) => get(RIGGING_PATH, taskId),
     createAnimationTask: (rigTaskId, clip) =>
       create(ANIMATIONS_PATH, {
@@ -157,6 +167,7 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
     createRemeshTask: (inputTaskId, targetPolycount) =>
       create(REMESH_PATH, {
         input_task_id: inputTaskId,
+        topology: REMESH_TOPOLOGY,
         ...(targetPolycount !== undefined ? { target_polycount: targetPolycount } : {}),
       }),
     getRemeshTask: (taskId) => get(REMESH_PATH, taskId),

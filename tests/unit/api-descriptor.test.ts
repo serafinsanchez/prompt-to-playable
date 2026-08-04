@@ -244,4 +244,19 @@ describe("stage body parameter pins", () => {
     expect(combined.startsWith("xxx")).toBe(true);
     expect(buildRefineTexturePrompt("")).toBe(REFINE_TEXTURE_STEER);
   });
+
+  it("remesh requests quad topology — the docs default is triangle, and this mesh is what gets rigged", () => {
+    expect(stageRequest(chainedRun(), "remesh").body).toEqual({
+      input_task_id: "refine-0002",
+      topology: "quad",
+      target_polycount: REMESH_TARGET_POLYCOUNT,
+    });
+  });
+
+  it("rig pins the humanoid height explicitly", () => {
+    expect(stageRequest(chainedRun(), "rig").body).toEqual({
+      input_task_id: "remesh-0003",
+      height_meters: 1.7,
+    });
+  });
 });

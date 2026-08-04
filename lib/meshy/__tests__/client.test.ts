@@ -14,6 +14,8 @@ import {
   REFINE_TEXTURE_RESOLUTION,
   REFINE_REMOVE_LIGHTING,
   REMESH_PATH,
+  REMESH_TOPOLOGY,
+  RIG_HEIGHT_METERS,
   RIGGING_PATH,
   taskGlbUrl,
   TEXT_TO_3D_AI_MODEL,
@@ -97,10 +99,10 @@ describe("createMeshyClient", () => {
     });
     const client = createMeshyClient(transport);
 
-    const taskId = await client.createRigTask("refine-0002");
+    const taskId = await client.createRigTask("remesh-0003");
 
     expect(taskId).toBe("rigging-0003");
-    expect(calls[0]!.body).toEqual({ input_task_id: "refine-0002" });
+    expect(calls[0]!.body).toEqual({ input_task_id: "remesh-0003", height_meters: RIG_HEIGHT_METERS });
   });
 
   it("createAnimationTask sends rig_task_id + integer action_id (live v1/animations shape)", async () => {
@@ -121,14 +123,18 @@ describe("createMeshyClient", () => {
 
   it("createRemeshTask passes target_polycount when given", async () => {
     const { transport, calls } = makeFixtureTransport({
-      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0005" } }],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
     });
     const client = createMeshyClient(transport);
 
     const taskId = await client.createRemeshTask("refine-0002", 30_000);
 
-    expect(taskId).toBe("remesh-0005");
-    expect(calls[0]!.body).toEqual({ input_task_id: "refine-0002", target_polycount: 30_000 });
+    expect(taskId).toBe("remesh-0003");
+    expect(calls[0]!.body).toEqual({
+      input_task_id: "refine-0002",
+      topology: REMESH_TOPOLOGY,
+      target_polycount: 30_000,
+    });
   });
 
   it("taskGlbUrl reads model_urls.glb for text-to-3d tasks", () => {

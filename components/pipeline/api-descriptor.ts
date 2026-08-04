@@ -22,6 +22,8 @@ import {
   REFINE_TEXTURE_RESOLUTION,
   REFINE_REMOVE_LIGHTING,
   REMESH_PATH,
+  REMESH_TOPOLOGY,
+  RIG_HEIGHT_METERS,
   RIGGING_PATH,
   TEXT_TO_3D_AI_MODEL,
   TEXT_TO_3D_PATH,
@@ -86,12 +88,14 @@ export function stageRequest(run: PipelineRun, stage: StageId): StageRequest {
   if (stage === "remesh") {
     return request(REMESH_PATH, {
       input_task_id: taskIdOr(run, "refine", "<refine-task-id>"),
+      topology: REMESH_TOPOLOGY,
       target_polycount: REMESH_TARGET_POLYCOUNT,
     });
   }
   if (stage === "rig") {
     return request(RIGGING_PATH, {
       input_task_id: taskIdOr(run, "remesh", "<remesh-task-id>"),
+      height_meters: RIG_HEIGHT_METERS,
     });
   }
   const clip = stage.slice("animate:".length) as AnimationClip;
