@@ -7,14 +7,51 @@ import type * as THREE from "three";
 import {
   bindCharacterClips,
   CLIP_NAMES,
+  type BoundCharacter,
   type CharacterSource,
   type ClipName,
 } from "./clip-binding";
+import { normalizeClipFacing } from "./clip-facing";
 
 /**
- * Loads a character's rig + clip GLBs, binds them through one mixer
- * (see `clip-binding.ts`), and keeps the named clip playing. Suspends
- * while GLBs load — mount inside <Suspense>.
+ * Load a character's rig + clip GLBs and bind them through one mixer
+ * (see `clip-binding.ts`). Suspends while GLBs load — call inside
+ * <Suspense>. Both the idle display (US-01a) and the controller
+ * (US-01b) build on this.
+ */
+export function useBoundCharacter(source: CharacterSource): {
+  scene: THREE.Object3D;
+  bound: BoundCharacter;
+} {
+  const rig = useGLTF(source.rig);
+  const clipUrls = useMemo(
+    () => CLIP_NAMES.map((name) => source.clips[name]),
+    [source],
+  );
+  const clipGltfs = useGLTF(clipUrls);
+
+  const bound = useMemo(() => {
+    const clips = Object.fromEntries(
+      CLIP_NAMES.map((name, i) => [name, clipGltfs[i].animations[0] ?? null]),
+    ) as Record<ClipName, THREE.AnimationClip | null>;
+    // Meshy clips don't share a root orientation — align them all to idle's.
+    normalizeClipFacing(rig.scene, clips);
+    return bindCharacterClips(rig.scene, clips);
+  }, [rig.scene, clipGltfs]);
+
+  useEffect(
+    () => () => {
+      bound.mixer.stopAllAction();
+    },
+    [bound],
+  );
+
+  return { scene: rig.scene, bound };
+}
+
+/**
+ * Static display character: keeps the named clip playing. The
+ * controllable knight lives in `controlled-character.tsx`.
  */
 export function Character({
   source,
@@ -23,23 +60,7 @@ export function Character({
   source: CharacterSource;
   clip?: ClipName;
 }) {
-  const rig = useGLTF(source.rig);
-  const clipUrls = useMemo(
-    () => CLIP_NAMES.map((name) => source.clips[name]),
-    [source],
-  );
-  const clipGltfs = useGLTF(clipUrls);
-
-  const bound = useMemo(
-    () =>
-      bindCharacterClips(
-        rig.scene,
-        Object.fromEntries(
-          CLIP_NAMES.map((name, i) => [name, clipGltfs[i].animations[0] ?? null]),
-        ) as Record<ClipName, THREE.AnimationClip | null>,
-      ),
-    [rig.scene, clipGltfs],
-  );
+  const { scene, bound } = useBoundCharacter(source);
 
   useEffect(() => {
     const action = bound.actions[clip];
@@ -49,15 +70,8 @@ export function Character({
     };
   }, [bound, clip]);
 
-  useEffect(
-    () => () => {
-      bound.mixer.stopAllAction();
-    },
-    [bound],
-  );
-
   // The idle is content, not chrome — it keeps playing under reduced motion.
   useFrame((_, delta) => bound.mixer.update(delta));
 
-  return <primitive object={rig.scene} />;
+  return <primitive object={scene} />;
 }
