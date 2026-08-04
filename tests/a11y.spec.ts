@@ -162,3 +162,87 @@ for (const viewport of LIGHTBOX_VIEWPORTS) {
     expect(results.violations).toEqual([]);
   });
 }
+
+// US-09: the completion card (playground CTA included) only renders for a
+// succeeded run — seed one and scan the page in that state.
+for (const viewport of LIGHTBOX_VIEWPORTS) {
+  test(`a11y: completion card @ ${viewport.name}`, async ({ page }) => {
+    const now = Date.now();
+    const completedAt = now - 60_000;
+    const startedAt = completedAt - 360_000;
+    const glb: Record<string, string> = {
+      rig: '/gallery/goblin-scout/rig.dbdf23df.glb',
+      'animate:idle': '/gallery/goblin-scout/idle.ac8005c8.glb',
+      'animate:walk': '/gallery/goblin-scout/walk.60033e63.glb',
+      'animate:run': '/gallery/goblin-scout/run.d48f78c2.glb',
+      'animate:jump': '/gallery/goblin-scout/jump.618f4e1a.glb',
+      'animate:emote': '/gallery/goblin-scout/emote.1b9c887c.glb',
+    };
+    const stages = Object.fromEntries(
+      [
+        'preview',
+        'refine',
+        'remesh',
+        'rig',
+        'animate:idle',
+        'animate:walk',
+        'animate:run',
+        'animate:jump',
+        'animate:emote',
+      ].map((stage, index) => [
+        stage,
+        {
+          stage,
+          status: 'succeeded',
+          taskId: `${stage}-task`,
+          progress: 100,
+          precedingTasks: null,
+          creditCost: index === 0 ? 20 : 5,
+          modelUrl: glb[stage] ?? null,
+          startedAt: startedAt + index * 30_000,
+          completedAt: startedAt + index * 30_000 + 25_000,
+          error: null,
+        },
+      ]),
+    );
+    const run = {
+      prompt: 'a bronze knight with a tower shield',
+      status: 'succeeded',
+      stages,
+      startedAt,
+      completedAt,
+      creditsSpent: 55,
+      waitingForQueue: false,
+      rateLimitBackoffMs: null,
+      nextPollAt: null,
+    };
+
+    await page.addInitScript(
+      ([key, envelope]) => {
+        window.localStorage.setItem(key, envelope);
+      },
+      [RUN_STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, run })] as const,
+    );
+
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByTestId('playground-cta')).toBeVisible();
+    // Let the card's entrance fade finish — axe's contrast check reads
+    // mid-transition opacity as a real violation.
+    await expect(page.getByTestId('completion')).toHaveCSS('opacity', '1');
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+
+    if (results.violations.length > 0) {
+      console.error(
+        `\n❌ a11y violations on the completion card @ ${viewport.name}:\n` +
+          JSON.stringify(results.violations, null, 2),
+      );
+    }
+
+    expect(results.violations).toEqual([]);
+  });
+}
