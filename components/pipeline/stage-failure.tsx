@@ -13,8 +13,10 @@ import type { PipelineRun, StageState } from "../../lib/meshy/types";
 import { failureCopy } from "./stage-meta";
 import { usePipeline } from "./use-pipeline";
 
+// One stagger behind the cross (US-07): the cross lands, then the panel
+// expands — same offset the thumbnail keeps behind the tick.
 const PANEL_ENTRANCE =
-  "transition-[opacity,translate] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none";
+  "transition-[opacity,translate] delay-(--duration-stagger) duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none";
 
 export function StageFailure({ run, state }: { run: PipelineRun; state: StageState }) {
   const retry = usePipeline((store) => store.retry);

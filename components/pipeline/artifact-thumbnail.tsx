@@ -188,7 +188,7 @@ export function ArtifactThumbnail({ url, thumbnailUrl, label }: ArtifactThumbnai
           onError={() => setImageState("failed")}
           className={
             imageState === "loaded"
-              ? "size-full object-cover transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
+              ? "size-full object-cover transition-[transform,opacity] delay-(--duration-stagger) duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
               : "hidden"
           }
         />
@@ -199,7 +199,7 @@ export function ArtifactThumbnail({ url, thumbnailUrl, label }: ArtifactThumbnai
           src={shownSrc}
           alt={`${label} stage mesh`}
           draggable={false}
-          className="size-full object-cover transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
+          className="size-full object-cover transition-[transform,opacity] delay-(--duration-stagger) duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none"
         />
       )}
       {shownSrc === null && (

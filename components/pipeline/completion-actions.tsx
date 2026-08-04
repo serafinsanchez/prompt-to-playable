@@ -85,9 +85,11 @@ export function CompletionActions({
   const playable = !expired && generatedCharacterSource(run) !== null;
 
   return (
+    // US-07 handoff: the entrance delay waits out the final clip's beat
+    // (fill + tick) — completion arrives after the last tick lands.
     <div
       data-testid="completion"
-      className="flex flex-col gap-3 rounded-md border border-border bg-elevated p-3 transition-[opacity,translate] duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none"
+      className="flex flex-col gap-3 rounded-md border border-border bg-elevated p-3 transition-[opacity,translate] delay-(--duration-beat-advance) duration-(--duration-normal) ease-(--ease-stage) starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none"
     >
       {/* Your character finally gets a name — the prompt, in display type, whole. */}
       <h3 className="break-words font-display text-base font-extrabold tracking-display">

@@ -25,6 +25,7 @@ import {
 import { ApiPanel } from "./api-panel";
 import { ArtifactLightbox } from "./artifact-lightbox";
 import { ArtifactThumbnail } from "./artifact-thumbnail";
+import { beatPresentation, useCompletionBeat } from "./completion-beat";
 import { ProgressRing } from "./progress-ring";
 import { MESH_STAGES, meshArtifacts, type MeshArtifact } from "./artifacts";
 import { backpressure, rowPresentation, stageDisplayName, type RowPresentation } from "./stage-meta";
@@ -46,21 +47,24 @@ function StageRow({
   state,
   index,
   compact = false,
-  override,
+  presentation,
+  ringProgress,
   onEnlarge,
 }: {
   run: PipelineRun;
   state: StageState;
   index: number;
   compact?: boolean;
-  /** US-06: run-level backpressure (backoff / queue-full) lands on the active row only. */
-  override?: RowPresentation | undefined;
+  /** Display truth for this row — backpressure and the US-07 beat already applied. */
+  presentation: RowPresentation;
+  /** Ring percent, beat-adjusted (a filling ring completes to 100 before the tick). */
+  ringProgress: number;
   /** US-08: opens the lightbox on this stage's artifact via `onEnlarge(stage)`.
       Passed to every row — rig and all five animate:* clips included — the
       enlarge button itself only renders where `hasArtifact` is true below. */
   onEnlarge?: ((stage: StageId) => void) | undefined;
 }) {
-  const { kind, meta } = override ?? rowPresentation(state);
+  const { kind, meta } = presentation;
   const name = stageDisplayName(state.stage);
   // US-04: every row expands to the API call that produced it.
   const [expanded, setExpanded] = useState(false);
@@ -87,7 +91,7 @@ function StageRow({
           onClick={() => setExpanded((open) => !open)}
           className={`flex w-full items-center gap-3 rounded-sm text-left hover:bg-elevated focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:bg-elevated disabled:cursor-not-allowed disabled:opacity-40 ${compact ? "min-h-5" : "min-h-6"}`}
         >
-          <ProgressRing kind={kind} progress={state.progress} compact={compact} />
+          <ProgressRing kind={kind} progress={ringProgress} compact={compact} />
           <span
             className={`font-mono text-xs uppercase tracking-caps ${
               kind === "pending" ? "text-muted" : kind === "running" ? "text-accent" : "text-foreground"
@@ -172,6 +176,9 @@ export function StageRail() {
   // append in pipeline order and never shrink while a run is live, so an
   // open index can never outrun the array it was captured against.
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  // US-07: the completion beat — display lags the store by the DESIGN.md
+  // offsets so tick, thumbnail, and rail advance land as a sequence.
+  const beats = useCompletionBeat(run);
   if (run === null) return null;
   // US-06: at most one row carries the run-level 429 overlay.
   const pressure = backpressure(run);
@@ -179,6 +186,12 @@ export function StageRail() {
   const enlarge = (stage: StageId): void => {
     const index = artifacts.findIndex((artifact) => artifact.stage === stage);
     if (index !== -1) setOpenIndex(index);
+  };
+  const display = (stage: StageId): { presentation: RowPresentation; progress: number } => {
+    const state = run.stages[stage];
+    const actual =
+      pressure?.stage === stage ? pressure.presentation : rowPresentation(state);
+    return beatPresentation(stage, actual, state.progress, beats);
   };
 
   return (
@@ -190,16 +203,20 @@ export function StageRail() {
       className="flex flex-col gap-2 rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
     >
       <ol className="flex flex-col gap-2">
-        {LINEAR_ROWS.map((stage, index) => (
-          <StageRow
-            key={stage}
-            run={run}
-            state={run.stages[stage]}
-            index={index}
-            override={pressure?.stage === stage ? pressure.presentation : undefined}
-            onEnlarge={enlarge}
-          />
-        ))}
+        {LINEAR_ROWS.map((stage, index) => {
+          const { presentation, progress } = display(stage);
+          return (
+            <StageRow
+              key={stage}
+              run={run}
+              state={run.stages[stage]}
+              index={index}
+              presentation={presentation}
+              ringProgress={progress}
+              onEnlarge={enlarge}
+            />
+          );
+        })}
       </ol>
 
       {/* The five clips run as one parallel group — rendered as one cluster. */}
@@ -213,19 +230,21 @@ export function StageRail() {
           animate ×5
         </h3>
         <ol className="flex flex-col gap-2 border-l border-border pl-3">
-          {ANIMATION_CLIPS.map((clip, index) => (
-            <StageRow
-              key={clip}
-              run={run}
-              state={run.stages[`animate:${clip}`]}
-              index={LINEAR_ROWS.length + 1 + index}
-              compact
-              override={
-                pressure?.stage === `animate:${clip}` ? pressure.presentation : undefined
-              }
-              onEnlarge={enlarge}
-            />
-          ))}
+          {ANIMATION_CLIPS.map((clip, index) => {
+            const { presentation, progress } = display(`animate:${clip}`);
+            return (
+              <StageRow
+                key={clip}
+                run={run}
+                state={run.stages[`animate:${clip}`]}
+                index={LINEAR_ROWS.length + 1 + index}
+                compact
+                presentation={presentation}
+                ringProgress={progress}
+                onEnlarge={enlarge}
+              />
+            );
+          })}
         </ol>
       </section>
 

@@ -47,6 +47,7 @@
 - **Stagger:** 60ms between children (gallery cards, rail stages).
 - **Only `transform` and `opacity`.** `will-change` applied before, removed after.
 - **Signature moment:** a pipeline stage completing — progress ring fills, tick lands, artifact thumbnail clips in from below (220ms), rail advances. Spend polish here; it's the emotional beat of the wait.
+- **Beat offsets (US-07):** ring holds its completed fill 120ms (fast) → tick/cross lands (220ms entrance) → thumbnail / failure panel +60ms stagger → rail advances at 240ms (fill + 2× stagger). The completion card's entrance waits out the final clip's beat (240ms delay). Failure gets equal weight: the cross uses the tick's entrance. Swap-in arrival: the character scales 0.94→1 over 380ms on the brand curve.
 - **`prefers-reduced-motion`:** strict — durations→0, stagger→0, camera cuts instead of glides. The character's own idle animation may keep playing (it's content, not chrome).
 
 ## Voice

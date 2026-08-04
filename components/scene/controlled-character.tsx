@@ -6,6 +6,7 @@ import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import Ecctrl, { useGame } from "ecctrl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { ARRIVAL_MS, arrivalScale } from "./arrival";
 import { useBoundCharacter } from "./character";
 import { CLIP_NAMES, type CharacterSource, type ClipName } from "./clip-binding";
 import {
@@ -79,6 +80,10 @@ function CharacterBody({ source }: { source: CharacterSource }) {
   const lastPosition = useRef<THREE.Vector3 | null>(null);
   const smoothedSpeed = useRef(0);
   const worldPosition = useMemo(() => new THREE.Vector3(), []);
+  // US-07 swap-in arrival: one 380ms scale settle per mount — the boundary is
+  // keyed by rig, so every character taking the stage gets its entrance.
+  const arrivalElapsedMs = useRef(0);
+  const reducedMotion = usePrefersReducedMotion();
 
   const [subscribeKeys] = useKeyboardControls();
 
@@ -137,6 +142,11 @@ function CharacterBody({ source }: { source: CharacterSource }) {
   }, [bound]);
 
   useFrame((_, delta) => {
+    if (group.current && arrivalElapsedMs.current < ARRIVAL_MS) {
+      arrivalElapsedMs.current += delta * 1000;
+      group.current.scale.setScalar(arrivalScale(arrivalElapsedMs.current, reducedMotion));
+    }
+
     if (group.current) {
       group.current.getWorldPosition(worldPosition);
 

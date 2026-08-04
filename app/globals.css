@@ -45,6 +45,10 @@
   --duration-fast: 120ms;
   --duration-normal: 220ms;
   --duration-slow: 380ms;
+  /* US-07 completion beat: 60ms child stagger (DESIGN.md), and the rail-advance
+     hold — fill (fast) + 2× stagger — that the completion card waits out. */
+  --duration-stagger: 60ms;
+  --duration-beat-advance: 240ms;
   /* Ambient wait-loop (queued rings, loading thumbs) on the brand curve —
      an exemption from the 400ms cap, like the idle animation (content). */
   --animate-pulse: pulse 1.8s var(--ease-stage) infinite;

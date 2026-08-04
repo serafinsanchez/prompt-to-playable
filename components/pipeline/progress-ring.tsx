@@ -90,7 +90,13 @@ export function ProgressRing({ kind, progress, compact = false }: ProgressRingPr
       )}
 
       {kind === "failed" && (
-        <g strokeWidth="2" strokeLinecap="round" className={stroke}>
+        // The cross lands with the tick's exact entrance — every terminal
+        // state gets the same choreography weight (US-07).
+        <g
+          strokeWidth="2"
+          strokeLinecap="round"
+          className={`${stroke} origin-center transition-[transform,opacity] duration-(--duration-normal) ease-(--ease-stage) starting:scale-75 starting:opacity-0 motion-reduce:transition-none`}
+        >
           <line x1="7.5" y1="7.5" x2="12.5" y2="12.5" />
           <line x1="12.5" y1="7.5" x2="7.5" y2="12.5" />
         </g>
