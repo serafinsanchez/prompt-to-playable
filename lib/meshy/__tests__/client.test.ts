@@ -6,11 +6,14 @@ import {
   BALANCE_PATH,
   createMeshyClient,
   PREVIEW_POSE_MODE,
+  PREVIEW_SHOULD_REMESH,
+  PREVIEW_TARGET_POLYCOUNT,
   PREVIEW_TOPOLOGY,
   REFINE_TEXTURE_PROMPT,
   REMESH_PATH,
   RIGGING_PATH,
   taskGlbUrl,
+  TEXT_TO_3D_AI_MODEL,
   TEXT_TO_3D_PATH,
 } from "../client";
 import { MeshyApiError } from "../types";
@@ -37,9 +40,15 @@ describe("createMeshyClient", () => {
       prompt: "a brave knight",
       pose_mode: PREVIEW_POSE_MODE,
       topology: PREVIEW_TOPOLOGY,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      should_remesh: PREVIEW_SHOULD_REMESH,
+      target_polycount: PREVIEW_TARGET_POLYCOUNT,
     });
     expect(PREVIEW_POSE_MODE).toBe("a-pose");
     expect(PREVIEW_TOPOLOGY).toBe("quad");
+    expect(TEXT_TO_3D_AI_MODEL).toBe("meshy-6");
+    expect(PREVIEW_SHOULD_REMESH).toBe(true);
+    expect(PREVIEW_TARGET_POLYCOUNT).toBe(30_000);
   });
 
   it("createRefineTask chains by preview_task_id with PBR and anti-lettering texture steer", async () => {

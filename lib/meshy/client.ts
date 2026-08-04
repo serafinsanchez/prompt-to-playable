@@ -23,6 +23,21 @@ export const PREVIEW_POSE_MODE = "a-pose";
 export const PREVIEW_TOPOLOGY = "quad";
 
 /**
+ * Pinned generation model for both preview and refine (docs.meshy.ai
+ * text-to-3d v2). Pinned instead of "latest" so results are reproducible
+ * and the API panel teaches a real choice.
+ */
+export const TEXT_TO_3D_AI_MODEL = "meshy-6";
+/**
+ * meshy-6 defaults should_remesh to FALSE — without forcing it on, the
+ * topology/target_polycount params below are silently ignored and preview
+ * returns raw high-poly triangles.
+ */
+export const PREVIEW_SHOULD_REMESH = true;
+/** Same 30k budget the remesh stage targets (types.ts REMESH_TARGET_POLYCOUNT). */
+export const PREVIEW_TARGET_POLYCOUNT = 30_000;
+
+/**
  * Refine texture steer: generative texturing can't spell, so any prompt that
  * implies logos or jersey lettering comes back as smudged glyphs. Sent on
  * every refine alongside the mesh prompt.
@@ -104,6 +119,9 @@ export function createMeshyClient(transport: MeshyTransport): MeshyClient {
         prompt,
         pose_mode: PREVIEW_POSE_MODE,
         topology: PREVIEW_TOPOLOGY,
+        ai_model: TEXT_TO_3D_AI_MODEL,
+        should_remesh: PREVIEW_SHOULD_REMESH,
+        target_polycount: PREVIEW_TARGET_POLYCOUNT,
       }),
     createRefineTask: (previewTaskId) =>
       create(TEXT_TO_3D_PATH, {

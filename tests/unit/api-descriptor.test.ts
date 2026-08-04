@@ -195,3 +195,22 @@ describe("creditCopy", () => {
     expect(creditCopy(run.stages.rig, "rig")).toBe("2 credits consumed — no auto-refund reported");
   });
 });
+
+describe("stage body parameter pins", () => {
+  // The sync test proves client === panel; these pin the actual values so
+  // both can't drift together. Sources: docs.meshy.ai (fetched 2026-08-04).
+  it("preview requests meshy-6 with an explicit remesh phase (quad, 30k)", () => {
+    const body = stageRequest(chainedRun(), "preview").body;
+    expect(body).toEqual({
+      mode: "preview",
+      prompt: "a bronze knight with a tower shield",
+      pose_mode: "a-pose",
+      topology: "quad",
+      ai_model: "meshy-6",
+      // meshy-6 defaults should_remesh to false, which silently ignores
+      // topology/target_polycount — must be explicit.
+      should_remesh: true,
+      target_polycount: 30_000,
+    });
+  });
+});

@@ -16,9 +16,12 @@ import {
   ANIMATIONS_PATH,
   PREVIEW_POSE_MODE,
   PREVIEW_TOPOLOGY,
+  PREVIEW_SHOULD_REMESH,
+  PREVIEW_TARGET_POLYCOUNT,
   REFINE_TEXTURE_PROMPT,
   REMESH_PATH,
   RIGGING_PATH,
+  TEXT_TO_3D_AI_MODEL,
   TEXT_TO_3D_PATH,
 } from "../../lib/meshy/client";
 import {
@@ -62,6 +65,9 @@ export function stageRequest(run: PipelineRun, stage: StageId): StageRequest {
       prompt: run.prompt,
       pose_mode: PREVIEW_POSE_MODE,
       topology: PREVIEW_TOPOLOGY,
+      ai_model: TEXT_TO_3D_AI_MODEL,
+      should_remesh: PREVIEW_SHOULD_REMESH,
+      target_polycount: PREVIEW_TARGET_POLYCOUNT,
     });
   }
   if (stage === "refine") {
