@@ -4,6 +4,7 @@ import { ANIMATIONS_PATH, createMeshyClient, REMESH_PATH, RIGGING_PATH, TEXT_TO_
 import {
   createEmptyRun,
   createPipeline,
+  MAX_CONSECUTIVE_TICK_FAILURES,
   POLL_INTERVAL_MS,
   RATE_LIMIT_BASE_BACKOFF_MS,
   retryFailedStage,
@@ -11,6 +12,7 @@ import {
 import { loadRun, saveRun } from "../storage";
 import type { StorageAdapter } from "../storage";
 import {
+  MeshyApiError,
   NoMoreConcurrentTasksError,
   RateLimitExceededError,
   type PipelineRun,
@@ -207,6 +209,162 @@ describe("asset URL isomorphism", () => {
     await pipeline.tick(); // poll → succeeded
 
     expect(pipeline.getRun().stages.preview.modelUrl).toBe(signed);
+  });
+});
+
+describe("thumbnail persistence", () => {
+  it("stores a succeeded task's thumbnail_url — the rail renders it instead of loading the mesh", async () => {
+    const thumb = "https://assets.meshy.ai/uid/tasks/preview-0001/output/preview.png?Expires=1";
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        {
+          body: task("preview-0001", "SUCCEEDED", {
+            consumed_credits: 20,
+            model_urls: { glb: "https://assets.meshy.test/preview-0001.glb" },
+            thumbnail_url: thumb,
+          }),
+        },
+      ],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick();
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick();
+
+    // Raw URL, like modelUrl — <img> needs no CORS; state stays isomorphic.
+    expect(pipeline.getRun().stages.preview.thumbnailUrl).toBe(thumb);
+  });
+
+  it("stores null when the task carries no thumbnail_url", async () => {
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [{ body: succeeded("preview-0001", 20) }],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick();
+    set(POLL_INTERVAL_MS);
+    await pipeline.tick();
+
+    expect(pipeline.getRun().stages.preview.thumbnailUrl).toBeNull();
+  });
+});
+
+describe("persistent poll failure", () => {
+  it("fails the run after MAX_CONSECUTIVE_TICK_FAILURES so terminal affordances appear", async () => {
+    // A resumed run whose task ids no longer exist (e.g. abandoned >3 days)
+    // 404s on every poll, forever. Without a cap the UI polls eternally with
+    // no retry and no start-over — bricked until localStorage is hand-cleared.
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { error: new MeshyApiError(404, "NotFound", "Task not found") },
+      ],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick(); // creates preview
+
+    for (let i = 1; i <= MAX_CONSECUTIVE_TICK_FAILURES; i += 1) {
+      set(i * POLL_INTERVAL_MS);
+      // Failures below the cap surface to the store as transient tickError.
+      if (i < MAX_CONSECUTIVE_TICK_FAILURES) {
+        await expect(pipeline.tick()).rejects.toThrow("Task not found");
+        expect(pipeline.getRun().status).toBe("running");
+      } else {
+        await pipeline.tick(); // the cap converts the failure to a halt
+      }
+    }
+
+    const run = pipeline.getRun();
+    expect(run.status).toBe("failed");
+    expect(run.stages.preview.status).toBe("failed");
+    // The halt is OUR give-up, not Meshy's task_error — it must live in its
+    // own field so the panel never passes our prose off as API output.
+    expect(run.stages.preview.haltReason).toContain("Task not found");
+    expect(run.stages.preview.error).toBeNull();
+    expect(run.completedAt).not.toBeNull();
+
+    // Terminal: further ticks no-op instead of polling forever.
+    set(100 * POLL_INTERVAL_MS);
+    const after = await pipeline.tick();
+    expect(after.status).toBe("failed");
+  });
+
+  it("retrying a halted stage re-polls the same task — no re-create, no re-spend", async () => {
+    const dead = new MeshyApiError(404, "NotFound", "Task not found");
+    const { pipeline, set, calls, client } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        ...Array.from({ length: MAX_CONSECUTIVE_TICK_FAILURES }, () => ({ error: dead })),
+        // After the user's "check again": the task turns out to be alive.
+        { body: succeeded("preview-0001", 20) },
+      ],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick(); // create
+    for (let i = 1; i <= MAX_CONSECUTIVE_TICK_FAILURES; i += 1) {
+      set(i * POLL_INTERVAL_MS);
+      await pipeline.tick().catch(() => undefined);
+    }
+    expect(pipeline.getRun().status).toBe("failed");
+
+    const revived = retryFailedStage(pipeline.getRun());
+    // The task id is kept: this is "check again", not "retry — N credits".
+    expect(revived.stages.preview.taskId).toBe("preview-0001");
+    expect(revived.stages.preview.status).toBe("running");
+    expect(revived.stages.preview.haltReason).toBeNull();
+    expect(revived.status).toBe("running");
+
+    // Resume on the same scripted transport: the next fixture entry answers.
+    const resumed = createPipeline({
+      client,
+      clock: { now: () => 100 * POLL_INTERVAL_MS },
+      run: revived,
+    });
+    await resumed.tick();
+    expect(resumed.getRun().stages.preview.status).toBe("succeeded");
+    // Exactly one preview create ever — the success also chains the refine
+    // create (same path, mode: "refine"), which is correct and not a re-spend.
+    const creates = calls
+      .filter((c) => c.key === `POST ${TEXT_TO_3D_PATH}`)
+      .map((c) => (c.body as { mode: string }).mode);
+    expect(creates).toEqual(["preview", "refine"]);
+  });
+
+  it("a successful poll resets the failure count", async () => {
+    const flaky = new MeshyApiError(500, null, "upstream hiccup");
+    const { pipeline, set } = pipelineWith({
+      [`POST ${TEXT_TO_3D_PATH}`]: [{ body: { result: "preview-0001" } }],
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [
+        { error: flaky },
+        { error: flaky },
+        { error: flaky },
+        { error: flaky }, // four failures — one short of the cap
+        { body: task("preview-0001", "IN_PROGRESS", { progress: 10 }) }, // success resets
+        { error: flaky },
+        { error: flaky },
+      ],
+    });
+
+    pipeline.start("a brave knight");
+    await pipeline.tick(); // create
+    for (let i = 1; i <= 4; i += 1) {
+      set(i * POLL_INTERVAL_MS);
+      await expect(pipeline.tick()).rejects.toThrow("upstream hiccup");
+    }
+    set(5 * POLL_INTERVAL_MS);
+    await pipeline.tick(); // success — counter back to zero
+    for (let i = 6; i <= 7; i += 1) {
+      set(i * POLL_INTERVAL_MS);
+      await expect(pipeline.tick()).rejects.toThrow("upstream hiccup");
+    }
+
+    // Two failures since the success — nowhere near the cap; still running.
+    expect(pipeline.getRun().status).toBe("running");
   });
 });
 

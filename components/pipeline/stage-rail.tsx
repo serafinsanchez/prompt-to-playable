@@ -106,8 +106,13 @@ function StageRow({
           </span>
         )}
         {kind === "succeeded" && MESH_STAGES.has(state.stage) && state.modelUrl !== null && (
-          // Proxy form at the boundary — state holds the raw signed URL.
-          <ArtifactThumbnail url={proxiedAssetUrl(state.modelUrl)} label={state.stage} />
+          // Thumbnail PNG renders directly (<img> needs no CORS); the GLB
+          // fallback goes through the proxy — state holds raw signed URLs.
+          <ArtifactThumbnail
+            url={proxiedAssetUrl(state.modelUrl)}
+            thumbnailUrl={state.thumbnailUrl ?? null}
+            label={state.stage}
+          />
         )}
         {/* Caret — the only affordance hint; rotates open, transform-only. */}
         <svg

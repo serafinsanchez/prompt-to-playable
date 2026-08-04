@@ -38,6 +38,14 @@ export interface Clock {
 export const POLL_INTERVAL_MS = 4000;
 export const RATE_LIMIT_BASE_BACKOFF_MS = 8000;
 export const RATE_LIMIT_MAX_BACKOFF_MS = 60_000;
+/**
+ * Consecutive unexpected tick failures (not 429s) before the machine gives
+ * up and fails the run. Without a cap, a resumed run whose task ids no
+ * longer exist (Meshy retention is ~3 days) 404s every 4s forever with no
+ * retry or start-over affordance — the UI is bricked until localStorage is
+ * cleared by hand. A success or 429 (the API is alive) resets the count.
+ */
+export const MAX_CONSECUTIVE_TICK_FAILURES = 5;
 
 export interface CreatePipelineOptions {
   client: MeshyClient;
@@ -74,9 +82,11 @@ export function createEmptyRun(prompt: string): PipelineRun {
         precedingTasks: null,
         creditCost: null,
         modelUrl: null,
+        thumbnailUrl: null,
         startedAt: null,
         completedAt: null,
         error: null,
+        haltReason: null,
       },
     ]),
   ) as PipelineRun["stages"];
@@ -111,6 +121,25 @@ export function retryFailedStage(run: PipelineRun): PipelineRun {
     throw new Error("retryFailedStage: run has no failed stage");
   }
 
+  // A poll-halt with a live task id is not a Meshy failure — the task may
+  // still be running. "Check again" resumes polling the SAME task: no
+  // re-create, no re-spend. (A halt before the create succeeded has no task
+  // id to re-poll; it falls through to the normal reset below.)
+  const halted = run.stages[failedStage];
+  if ((halted.haltReason ?? null) !== null && halted.taskId !== null) {
+    const next = clone(run);
+    const stage = next.stages[failedStage];
+    stage.status = "running";
+    stage.haltReason = null;
+    stage.completedAt = null;
+    next.status = "running";
+    next.completedAt = null;
+    next.waitingForQueue = false;
+    next.rateLimitBackoffMs = null;
+    next.nextPollAt = null; // the next tick polls immediately
+    return next;
+  }
+
   // Failed tasks normally auto-refund (creditCost 0 → reset to null), but if
   // Meshy reported real consumed credits, keep them counted — the credit
   // total must stay honest across a retry.
@@ -124,9 +153,11 @@ export function retryFailedStage(run: PipelineRun): PipelineRun {
     precedingTasks: null,
     creditCost: consumedCredits !== null && consumedCredits > 0 ? consumedCredits : null,
     modelUrl: null,
+    thumbnailUrl: null,
     startedAt: null,
     completedAt: null,
     error: null,
+    haltReason: null,
   };
   next.status = "running";
   next.completedAt = null;
@@ -144,6 +175,8 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
   const { client, clock } = options;
   let run: PipelineRun = options.run ? clone(options.run) : createEmptyRun("");
   const listeners = new Set<(run: PipelineRun) => void>();
+  // Not persisted: a resumed machine starts its patience fresh.
+  let consecutiveTickFailures = 0;
 
   const emit = (): void => {
     const snapshot = clone(run);
@@ -202,6 +235,7 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
       // Raw signed URL — state stays isomorphic (Node pregen/spike fetch it
       // directly); browser consumers proxy it at their boundary (assets.ts).
       state.modelUrl = taskGlbUrl(task);
+      state.thumbnailUrl = task.thumbnail_url ?? null;
       state.completedAt = clock.now();
       recomputeCredits();
     } else if (task.status === "FAILED" || task.status === "CANCELED") {
@@ -285,6 +319,7 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
 
       try {
         await advance();
+        consecutiveTickFailures = 0;
         run.waitingForQueue = false;
         run.rateLimitBackoffMs = null;
         run.nextPollAt = clock.now() + POLL_INTERVAL_MS;
@@ -300,15 +335,36 @@ export function createPipeline(options: CreatePipelineOptions): Pipeline {
           run.nextPollAt = now + backoff;
           // The flavors are mutually exclusive in state, not just in copy.
           run.waitingForQueue = false;
+          consecutiveTickFailures = 0; // throttled means the API is alive
         } else if (error instanceof NoMoreConcurrentTasksError) {
           // Queue full: nothing wrong with our rate — keep the normal cadence
           // and let the UI say "Meshy queue full — waiting".
           run.waitingForQueue = true;
           run.rateLimitBackoffMs = null;
           run.nextPollAt = now + POLL_INTERVAL_MS;
-        } else {
+          consecutiveTickFailures = 0;
+        } else if (consecutiveTickFailures + 1 < MAX_CONSECUTIVE_TICK_FAILURES) {
+          consecutiveTickFailures += 1;
           emit();
-          throw error;
+          throw error; // surfaced as a transient tickError; cadence continues
+        } else {
+          // Patience exhausted: fail the active stage so the run goes
+          // terminal and the retry / start-over affordances appear. The
+          // give-up lands in haltReason, never in `error` — that field is
+          // Meshy's verbatim words and this halt is ours; the task may in
+          // fact still be running server-side.
+          const message = error instanceof Error ? error.message : String(error);
+          const active =
+            PIPELINE_STAGES.find((stage) => run.stages[stage].status === "running") ??
+            PIPELINE_STAGES.find((stage) => run.stages[stage].status === "pending");
+          if (active !== undefined) {
+            const state = run.stages[active];
+            state.status = "failed";
+            state.haltReason = `Gave up after ${MAX_CONSECUTIVE_TICK_FAILURES} failed checks. Last error: ${message}`;
+            state.completedAt = clock.now();
+          }
+          run.status = "failed";
+          run.completedAt = clock.now();
         }
       }
 

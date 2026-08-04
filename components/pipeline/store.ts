@@ -193,7 +193,11 @@ export function createPipelineStore(
         });
         if (storedRun !== null && storedRun.status === "running") {
           attach(storedRun);
-          startTicking();
+          // Key is sessionStorage, run is localStorage — a new tab restores
+          // the run but not the key. Attach without ticking so setKey()'s
+          // resumeTicker() picks it up; polling keyless would 401 into a
+          // "Key rejected" the visitor never earned.
+          if (storedKey !== null) startTicking();
         }
       },
 

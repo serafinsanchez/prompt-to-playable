@@ -307,6 +307,47 @@ describe("resume from storage", () => {
     expect(store.getState().run?.stages.refine.status).toBe("succeeded");
   });
 
+  it("hydrate without a key never polls — a new tab must not manufacture 'Key rejected'", async () => {
+    // Key lives in sessionStorage, the run in localStorage: closing the tab
+    // mid-run and reopening lands exactly here.
+    const stored = await makeMidFlight();
+
+    const { store, runStorage, calls, advance } = storeWith({});
+    saveRun(runStorage, stored);
+    // keyStorage deliberately empty.
+
+    store.getState().hydrate();
+    await drain();
+
+    expect(store.getState().run?.status).toBe("running"); // run restored, just paused
+    expect(store.getState().ticking).toBe(false);
+    expect(store.getState().keyError).toBeNull();
+    await advance(POLL_INTERVAL_MS);
+    expect(calls).toHaveLength(0); // no keyless poll ever leaves the store
+  });
+
+  it("pasting the key after a keyless hydrate resumes polling", async () => {
+    const stored = await makeMidFlight();
+
+    const { store, runStorage, scheduler, advance, calls, setNow } = storeWith({
+      [`GET ${TEXT_TO_3D_PATH}/:id`]: [{ body: succeeded("refine-0002", 10) }],
+      [`POST ${REMESH_PATH}`]: [{ body: { result: "remesh-0003" } }],
+    });
+    saveRun(runStorage, stored);
+    setNow(10 * POLL_INTERVAL_MS); // past the stored run's nextPollAt
+
+    store.getState().hydrate();
+    await drain();
+    store.getState().setKey("msy_test_key");
+    await drain();
+
+    expect(store.getState().ticking).toBe(true);
+    expect(scheduler.intervalMs).toBe(POLL_INTERVAL_MS);
+    await advance(POLL_INTERVAL_MS);
+    expect(calls.some((c) => c.key === `GET ${TEXT_TO_3D_PATH}/:id`)).toBe(true);
+    expect(store.getState().keyError).toBeNull();
+  });
+
   it("hydrate shows a terminal run without starting a ticker", async () => {
     const stored = await makeMidFlight();
     stored.status = "failed";

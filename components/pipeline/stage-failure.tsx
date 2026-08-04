@@ -20,7 +20,8 @@ export function StageFailure({ run, state }: { run: PipelineRun; state: StageSta
   const retry = usePipeline((store) => store.retry);
   const apiKey = usePipeline((store) => store.apiKey);
   const copy = failureCopy(run);
-  if (copy === null || state.error === null) return null;
+  const haltReason = state.haltReason ?? null;
+  if (copy === null || (state.error === null && haltReason === null)) return null;
 
   return (
     // role="status": the panel mounts exactly when the failure lands off a
@@ -30,13 +31,24 @@ export function StageFailure({ run, state }: { run: PipelineRun; state: StageSta
       role="status"
       className={`ml-4 flex flex-col gap-2 border-l border-error/40 pl-4 ${PANEL_ENTRANCE}`}
     >
-      {/* Meshy's task_error, verbatim — trimmed, never rewritten. */}
-      <p
-        data-testid={`stage-error-${state.stage}`}
-        className="font-mono text-xs leading-relaxed text-error"
-      >
-        {state.error.trim()}
-      </p>
+      {/* Two distinct voices, never blended: Meshy's task_error verbatim in
+          text-error, or OUR poll-halt give-up in text-warning — the halt is
+          not API output and must never read as if it were. */}
+      {state.error !== null ? (
+        <p
+          data-testid={`stage-error-${state.stage}`}
+          className="font-mono text-xs leading-relaxed text-error"
+        >
+          {state.error.trim()}
+        </p>
+      ) : (
+        <p
+          data-testid={`stage-halt-${state.stage}`}
+          className="font-mono text-xs leading-relaxed text-warning"
+        >
+          {haltReason}
+        </p>
+      )}
 
       <p className="font-mono text-xs leading-relaxed text-muted">{copy.refundLine}</p>
 

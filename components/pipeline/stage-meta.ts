@@ -142,6 +142,26 @@ export function failureCopy(run: PipelineRun): FailureCopy | null {
       ? null
       : `${capitalize(kept.join(", "))} ${kept.length === 1 ? "is" : "are"} kept.`;
 
+  // Poll halt (haltReason) — OUR give-up, not a Meshy task failure. Every
+  // Meshy-failure line would be false here: no auto-refund happened, the
+  // prompt was never diagnosed, and with a live task id a retry re-polls
+  // for free instead of re-spending.
+  const failed = run.stages[failedStage];
+  if ((failed.haltReason ?? null) !== null) {
+    return {
+      refundLine:
+        failed.taskId !== null
+          ? "The task may still be running at Meshy. Nothing extra was charged here."
+          : "The request never reached Meshy. Nothing was charged.",
+      explainer: null,
+      retryLabel:
+        failed.taskId !== null
+          ? "Check again — no new credits."
+          : `Retry ${stageDisplayName(failedStage)} — ${String(STAGE_CREDITS[failedStage])} credits.`,
+      keptLine,
+    };
+  }
+
   // Honest accounting that keeps the teaching moment: auto-refund is the
   // rule, so a non-zero charge is stated as the exception — never silently
   // swapped for a blind "0 credits" claim, never dropped.

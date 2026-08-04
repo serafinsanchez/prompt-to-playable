@@ -193,6 +193,46 @@ describe("backpressure (US-06: run-level 429s land on the active row)", () => {
   });
 });
 
+describe("failureCopy for a poll halt (the task may still be alive at Meshy)", () => {
+  it("halted rig with a task id: no refund claim, no biped diagnosis, free re-check", () => {
+    const run = runWith(["preview", "refine", "remesh"], { status: "failed" }, {
+      rig: {
+        status: "failed",
+        error: null,
+        haltReason: "Gave up after 5 failed checks. Last error: Task not found",
+        taskId: "rig-0001",
+        creditCost: null,
+      },
+    });
+    const copy = failureCopy(run);
+    // Every Meshy-failure line would be false here: the task did not fail,
+    // polling did. No auto-refund claim, no prompt diagnosis, no re-spend.
+    expect(copy?.refundLine).toBe(
+      "The task may still be running at Meshy. Nothing extra was charged here.",
+    );
+    expect(copy?.explainer).toBeNull();
+    expect(copy?.retryLabel).toBe("Check again — no new credits.");
+    expect(copy?.keptLine).toBe("Preview, refine, remesh are kept.");
+  });
+
+  it("halted before the create succeeded (no task id): normal retry price, still no diagnosis", () => {
+    const run = runWith([], { status: "failed" }, {
+      preview: {
+        status: "failed",
+        error: null,
+        haltReason: "Gave up after 5 failed checks. Last error: fetch failed",
+        taskId: null,
+        creditCost: null,
+      },
+    });
+    const copy = failureCopy(run);
+    // No task exists, so "may still be running" would be false too.
+    expect(copy?.refundLine).toBe("The request never reached Meshy. Nothing was charged.");
+    expect(copy?.explainer).toBeNull(); // the prompt was never the problem
+    expect(copy?.retryLabel).toBe("Retry preview — 20 credits.");
+  });
+});
+
 describe("failureCopy (US-06: honest retry economics + contextual explainers)", () => {
   it("rig failure: biped explainer, published retry price, kept upstream stages", () => {
     const run = runWith(["preview", "refine", "remesh"], { status: "failed" }, {

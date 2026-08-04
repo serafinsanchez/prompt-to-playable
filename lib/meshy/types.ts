@@ -112,11 +112,24 @@ export interface StageState {
   /** Actual credits consumed, captured on the terminal status. */
   creditCost: number | null;
   modelUrl: string | null;
+  /**
+   * Meshy's pre-rendered preview PNG (raw signed URL, like modelUrl).
+   * Optional: snapshots persisted before this field exist without it —
+   * readers treat absent as null and fall back to a GLB snapshot.
+   */
+  thumbnailUrl?: string | null;
   /** Clock timestamps (ms) — captured via the injected clock, never Date.now(). */
   startedAt: number | null;
   completedAt: number | null;
   /** Meshy's task_error.message, verbatim, when the stage failed. */
   error: string | null;
+  /**
+   * OUR give-up prose when the machine stopped polling (poll-failure cap) —
+   * never Meshy's words, never rendered as if it were. Optional: snapshots
+   * persisted before this field exist without it. The task itself may still
+   * be alive at Meshy, so retry re-polls instead of re-spending.
+   */
+  haltReason?: string | null;
 }
 
 export type PipelineStatus = "idle" | "running" | "succeeded" | "failed";

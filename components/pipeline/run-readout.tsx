@@ -20,6 +20,7 @@ function formatElapsed(ms: number): string {
 export function RunReadout() {
   const run = usePipeline((state) => state.run);
   const tickError = usePipeline((state) => state.tickError);
+  const apiKey = usePipeline((state) => state.apiKey);
   const running = run?.status === "running";
   // Wall-clock lives in state, never read during render (react-hooks/purity).
   const [now, setNow] = useState<number | null>(null);
@@ -46,6 +47,13 @@ export function RunReadout() {
       {/* The two 429 flavors render on the active stage row (US-06), not here. */}
       {tickError !== null && (
         <p className="font-mono text-xs text-warning">Poll failed — retrying. {tickError}</p>
+      )}
+      {/* Keyless resume: the run is restored but polling waits for the key —
+          say so, or the frozen ring reads as a dead spinner. */}
+      {running && apiKey === "" && (
+        <p data-testid="run-paused" className="font-mono text-xs text-muted">
+          Paused. Add your key to resume.
+        </p>
       )}
     </div>
   );
