@@ -1,6 +1,20 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { test, expect, type Page } from "@playwright/test";
 
 import { STORAGE_KEY as RUN_STORAGE_KEY, STORAGE_VERSION } from "../lib/meshy/storage";
+
+// A real, committed gallery mesh (resolved from the manifest so gallery
+// regenerations can't strand a hardcoded hash) — used where a test needs an
+// actual loadable GLB behind a same-origin URL.
+const knightEntry = (
+  JSON.parse(
+    readFileSync(join(process.cwd(), "public", "gallery", "manifest.json"), "utf8"),
+  ) as Array<{ slug: string; glbPath: string }>
+).find((entry) => entry.slug === "knight");
+if (!knightEntry) throw new Error("stage-rail.spec.ts: no knight entry in public/gallery/manifest.json");
+const KNIGHT_RIG = knightEntry.glbPath;
 
 // US-03b acceptance: the rail renders every stage state from scripted fixture
 // runs seeded straight into localStorage (the store hydrates them) — no live
@@ -391,7 +405,7 @@ test("enlarge: a dead thumbnail image falls back to the GLB snapshot render", as
         // real gallery mesh backs the fallback render so this is an actual
         // successful WebGL snapshot, not just a state-machine assertion.
         thumbnailUrl: "/this-thumbnail-does-not-exist.png",
-        modelUrl: "/gallery/knight/rig.8d812819.glb",
+        modelUrl: KNIGHT_RIG,
       },
     }),
   );
@@ -419,7 +433,7 @@ test("enlarge: stepping to a null-thumbnail artifact clears the stale image and 
       preview: {
         ...succeededStage("preview-0001", 20, 0),
         thumbnailUrl: null,
-        modelUrl: "/gallery/knight/rig.8d812819.glb",
+        modelUrl: KNIGHT_RIG,
       },
       refine: {
         ...succeededStage("refine-0002", 10, 90_000),

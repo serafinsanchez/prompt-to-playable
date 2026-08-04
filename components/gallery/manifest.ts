@@ -3,6 +3,7 @@ import {
   type CharacterSource,
   type ClipName,
 } from "../scene/clip-binding";
+import type { DownloadEntry } from "../pipeline/completion";
 import type { GalleryEntry, GalleryManifest } from "../../scripts/pregen/manifest";
 
 /**
@@ -64,6 +65,29 @@ export function toCharacterSource(entry: GalleryEntry): CharacterSource {
       CLIP_NAMES.map((clip) => [clip, entry.clipPaths[clip]]),
     ) as Record<ClipName, string>,
   };
+}
+
+/**
+ * Same shape as the live run's downloadPlan (completion.ts), but over the
+ * gallery's committed static assets — rig first, then the five clips. The
+ * paths are same-origin (/gallery/…), which is what makes the `download`
+ * attribute honored.
+ */
+export function galleryDownloadPlan(entry: GalleryEntry): DownloadEntry[] {
+  return [
+    {
+      label: "the character",
+      shortName: "rig.glb",
+      filename: `${entry.slug}-rig.glb`,
+      url: entry.glbPath,
+    },
+    ...CLIP_NAMES.map((clip) => ({
+      label: `${clip} clip`,
+      shortName: `${clip}.glb`,
+      filename: `${entry.slug}-${clip}.glb`,
+      url: entry.clipPaths[clip],
+    })),
+  ];
 }
 
 /** "55 credits. About 7 minutes." — numbers are copy (DESIGN.md voice). */

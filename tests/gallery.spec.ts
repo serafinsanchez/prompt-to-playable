@@ -1,26 +1,25 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { test, expect } from "@playwright/test";
 
 // US-02 acceptance: selecting a gallery card swaps the playground character
 // in place — no navigation, no reload. The test serves a two-entry manifest
 // (real knight + the raw spike GLBs as a second character) via route
 // interception, so it passes even while the real manifest has one entry.
+// The knight comes from the COMMITTED manifest so its hashed asset paths
+// always match the files on disk — hardcoding a hash broke on every
+// gallery regeneration.
+const realKnight = (
+  JSON.parse(
+    readFileSync(join(process.cwd(), "public", "gallery", "manifest.json"), "utf8"),
+  ) as Array<{ slug: string; glbPath: string }>
+).find((entry) => entry.slug === "knight");
+if (!realKnight) throw new Error("gallery.spec.ts: no knight entry in public/gallery/manifest.json");
+const KNIGHT_RIG = realKnight.glbPath;
+
 const TEST_MANIFEST = [
-  {
-    slug: "knight",
-    prompt: "low-poly knight in full plate armor",
-    glbPath: "/gallery/knight/rig.8d812819.glb",
-    clipPaths: {
-      idle: "/gallery/knight/idle.48b88150.glb",
-      walk: "/gallery/knight/walk.c0747f1e.glb",
-      run: "/gallery/knight/run.1b59fe82.glb",
-      jump: "/gallery/knight/jump.cc6d127e.glb",
-      emote: "/gallery/knight/emote.a82d43a6.glb",
-    },
-    creditTotal: 55,
-    generationSeconds: 431,
-    stageCredits: { preview: 20, refine: 10, remesh: 5, rig: 5 },
-    polyCount: 29015,
-  },
+  realKnight,
   {
     slug: "spike-knight",
     prompt: "the raw unoptimized spike knight",
@@ -52,8 +51,8 @@ test("clicking a gallery card swaps the character without a reload", async ({ pa
 
   // First entry is on stage once its GLBs bind.
   await page.waitForFunction(
-    () => window.__ptpCharacterRig === "/gallery/knight/rig.8d812819.glb",
-    undefined,
+    (rig) => window.__ptpCharacterRig === rig,
+    KNIGHT_RIG,
     { timeout: 120_000 },
   );
 

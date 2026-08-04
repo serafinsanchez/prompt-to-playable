@@ -1,7 +1,8 @@
 "use client";
 
+import { useId, useState } from "react";
 import type { GalleryEntry, GalleryManifest } from "../../scripts/pregen/manifest";
-import { formatReceipt } from "./manifest";
+import { formatReceipt, galleryDownloadPlan } from "./manifest";
 
 /**
  * Gallery rail (US-02): one card per manifest entry — all of them, always.
@@ -43,6 +44,59 @@ function StageBreakdown({ entry }: { entry: GalleryEntry }) {
   );
 }
 
+/**
+ * Download disclosure for the on-stage card — its own block because the card
+ * is a single <button> and links can't nest inside it. Same pattern as the
+ * live run's completion download list (US-05): plain anchors, same-origin
+ * static paths, `download` honored.
+ */
+function GalleryDownloads({ entry }: { entry: GalleryEntry }) {
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const plan = galleryDownloadPlan(entry);
+
+  return (
+    // Desktop only, like the card's stage breakdown — on phones the strip is a
+    // cramped horizontal rail over the scene and an open list collides with
+    // the pipeline sheet (DESIGN.md: the scene stays the hero).
+    <div className="mt-2 hidden rounded-md border border-border bg-surface p-2 md:block">
+      <button
+        type="button"
+        data-testid={`gallery-download-toggle-${entry.slug}`}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={listId}
+        className="rounded-md border border-border px-3 py-1.5 font-mono text-xs uppercase tracking-caps text-foreground transition-transform duration-(--duration-fast) ease-(--ease-stage) hover:border-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent active:scale-95 motion-reduce:transition-none"
+      >
+        Download <span aria-hidden="true">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <ul
+          id={listId}
+          data-testid={`gallery-download-list-${entry.slug}`}
+          className="mt-2 flex flex-col gap-1 border-t border-border pt-2 transition-[opacity,translate] duration-(--duration-normal) ease-(--ease-stage) starting:-translate-y-1 starting:opacity-0 motion-reduce:transition-none"
+        >
+          {plan.map((item) => (
+            <li key={item.filename}>
+              <a
+                href={item.url}
+                download={item.filename}
+                data-testid={`gallery-download-${item.filename}`}
+                className="group flex items-baseline justify-between gap-3 rounded-sm px-1 py-1 font-mono text-xs text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <span className="shrink-0 text-foreground group-hover:text-accent">
+                  {item.shortName}
+                </span>
+                <span className="truncate">{item.label}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function GalleryCard({
   entry,
   active,
@@ -65,7 +119,7 @@ function GalleryCard({
       onClick={onSelect}
       onMouseEnter={onPreload}
       onFocus={onPreload}
-      className={`w-56 min-w-0 shrink-0 overflow-hidden rounded-md border p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait md:w-full ${
+      className={`w-full min-w-0 overflow-hidden rounded-md border p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait ${
         active
           ? "border-accent bg-surface"
           : "border-border bg-surface/80 hover:border-muted active:bg-elevated"
@@ -135,14 +189,19 @@ export function GalleryStrip({
         )}
         {status.state === "ready" &&
           status.entries.map((entry) => (
-            <GalleryCard
-              key={entry.slug}
-              entry={entry}
-              active={entry.slug === activeSlug}
-              pending={entry.slug === pendingSlug}
-              onSelect={() => onSelect(entry)}
-              onPreload={() => onPreload(entry)}
-            />
+            // Wrapper owns the strip sizing; the card button fills it, and the
+            // active card's download block sits below as a sibling (links
+            // can't nest inside the card button).
+            <div key={entry.slug} className="w-56 shrink-0 md:w-full">
+              <GalleryCard
+                entry={entry}
+                active={entry.slug === activeSlug}
+                pending={entry.slug === pendingSlug}
+                onSelect={() => onSelect(entry)}
+                onPreload={() => onPreload(entry)}
+              />
+              {entry.slug === activeSlug && <GalleryDownloads entry={entry} />}
+            </div>
           ))}
       </div>
     </section>

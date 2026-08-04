@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GalleryEntry } from "../../scripts/pregen/manifest";
 import {
   formatReceipt,
+  galleryDownloadPlan,
   parseGalleryManifest,
   toCharacterSource,
 } from "../../components/gallery/manifest";
@@ -82,5 +83,31 @@ describe("formatReceipt", () => {
     expect(formatReceipt({ ...knight, generationSeconds: 42 })).toBe(
       "55 credits. About 42 seconds.",
     );
+  });
+});
+
+describe("galleryDownloadPlan", () => {
+  it("lists the rig first, then the five clips, all same-origin static paths", () => {
+    const plan = galleryDownloadPlan(knight);
+
+    expect(plan).toHaveLength(6);
+    expect(plan[0]).toEqual({
+      label: "the character",
+      shortName: "rig.glb",
+      filename: "knight-rig.glb",
+      url: "/gallery/knight/rig.8d812819.glb",
+    });
+    expect(plan.slice(1).map((entry) => entry.shortName)).toEqual([
+      "idle.glb",
+      "walk.glb",
+      "run.glb",
+      "jump.glb",
+      "emote.glb",
+    ]);
+    // Same-origin relative paths are what make the `download` attribute honored.
+    for (const entry of plan) {
+      expect(entry.url.startsWith("/gallery/")).toBe(true);
+      expect(entry.filename).toBe(`knight-${entry.shortName}`);
+    }
   });
 });
