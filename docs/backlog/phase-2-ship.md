@@ -6,7 +6,7 @@
 |---|--------|------|------|------|
 | 1 | `[x]` | ui | US-07: The signature stage-completion moment | [us-07-signature-completion-moment.md](../specs/us-07-signature-completion-moment.md) |
 | 2 | `[ ]` | infra | TASK-07: Performance + accessibility budget pass | [task-07-perf-a11y-budget.md](../specs/task-07-perf-a11y-budget.md) |
-| 3 | `[~]` | infra | TASK-08: README as landing page + repo publish (repo already public under final name) | [task-08-readme-landing-publish.md](../specs/task-08-readme-landing-publish.md) |
+| 3 | `[x]` | infra | TASK-08: README as landing page + repo publish (repo already public under final name) | [task-08-readme-landing-publish.md](../specs/task-08-readme-landing-publish.md) |
 | 4 | `[ ]` | infra | TASK-09: Demo video (2–3 min), ready to publish | [task-09-demo-video.md](../specs/task-09-demo-video.md) |
 | 5 | `[ ]` | infra | TASK-10: Distribution plan + submission bundle | [task-10-distribution-submission.md](../specs/task-10-distribution-submission.md) |
 | 6 | `[x]` | ui | US-08: Enlarge a stage's mesh artifact (lightbox) | [us-08-artifact-lightbox.md](../specs/us-08-artifact-lightbox.md) |
