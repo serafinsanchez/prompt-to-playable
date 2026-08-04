@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { LivePipeline } from "@/components/pipeline/live-pipeline";
 import { DEFAULT_CHARACTER } from "@/components/scene/default-character";
 import { MOVEMENT_KEY_CODES } from "@/components/scene/controls";
 import { Playground } from "@/components/scene/playground";
@@ -87,6 +88,9 @@ export default function Home() {
       </header>
 
       <ControlHint />
+
+      {/* US-03a: live pipeline (key entry, prompt, minimal stage list) */}
+      <LivePipeline />
     </main>
   );
 }
