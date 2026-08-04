@@ -16,8 +16,10 @@
  * is active. If the focus-trap effect below depended on `onClose` directly,
  * it would tear down and rebuild on every tick — yanking focus out to the
  * opener and back in, visibly, while the dialog is open. `onClose` is read
- * through a ref instead, so the effect's dependency array is `[]` and setup
- * / teardown happen only on true mount / unmount.
+ * through a ref instead, so the effect's dependency array holds only `total`
+ * (the artifact count, a stable number) — never `onClose` or `artifacts`
+ * itself — and setup / teardown happen only on true mount/unmount or when
+ * the count changes.
  *
  * Hand-rolled focus trap — no new packages (CLAUDE.md). DESIGN.md forbids
  * backdrop-blur and shadows: the scrim is a flat tint, depth is the elevated
