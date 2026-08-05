@@ -118,15 +118,10 @@ export default function Home() {
           back to the gallery instead of letting the error unmount the app. */}
       <Playground character={generated.character} onCharacterError={handleCharacterError} />
 
-      {/* Thin overlay chrome — the scene is the hero (DESIGN.md). */}
+      {/* Thin overlay chrome — the scene is the hero (DESIGN.md).
+          Brand lives in the tab title (layout metadata), not on-canvas. */}
       <header className="pointer-events-none absolute inset-x-0 top-0">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-baseline justify-between gap-x-6 gap-y-2 px-6 pt-6">
-          {/* Wordmark is a noun, not a promise — the tagline beside it does the
-              explaining. "First playable" is the game-dev term for the first
-              build you can actually pick up and control. */}
-          <h1 className="font-display text-md font-extrabold tracking-display">
-            First Playable
-          </h1>
+        <div className="mx-auto flex max-w-7xl justify-end px-6 pt-6">
           <p className="font-mono text-xs uppercase tracking-caps text-muted">
             Type a character. Play it.
           </p>
