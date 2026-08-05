@@ -10,6 +10,6 @@
 ## Learned Workspace Facts
 
 - Next.js App Router + React Three Fiber + Tailwind v4 on Vercel; no database, no auth — the only persistence is Meshy task ids in `localStorage` and the visitor's API key in `sessionStorage`.
-- Meshy API is CORS-blocked from browsers by design: all calls go through the `app/api/meshy/[...path]` passthrough proxy (path-allowlisted, key header rewritten, nothing stored). Text to 3D is v2, every other endpoint v1; full behavior reference in `../claude-code-resources/MESHY_CLAUDE.md`.
+- Meshy API is CORS-blocked from browsers by design: all calls go through the `app/api/meshy/[...path]` passthrough proxy (path-allowlisted, key header rewritten, nothing stored). Text to 3D is v2, every other endpoint v1; full behavior reference in `llms-full.txt` (Meshy's published docs dump) and https://docs.meshy.ai.
 
 <!-- Add only durable, high-signal facts (not one-off debugging). Exclude secrets. -->

@@ -4,7 +4,7 @@ This file is **session memory**. Read it before doing anything else. Deep detail
 
 ## What this product actually is
 
-A browser demo that turns a text prompt into a playable game character via the Meshy API: preview mesh → PBR texture → rig → animate, then the character drops into a third-person playground scene. A pre-generated gallery gives cold visitors payoff in ~10 seconds; a BYO Meshy API key unlocks live generation with every API call shown on screen. Built as a Meshy DevRel take-home — the demo must *teach the API while it entertains*. No accounts, no database, no gameplay objectives. Meshy API behavior reference: `../claude-code-resources/MESHY_CLAUDE.md`.
+A browser demo that turns a text prompt into a playable game character via the Meshy API: preview mesh → PBR texture → rig → animate, then the character drops into a third-person playground scene. A pre-generated gallery gives cold visitors payoff in ~10 seconds; a BYO Meshy API key unlocks live generation with every API call shown on screen. Built as a Meshy DevRel take-home — the demo must *teach the API while it entertains*. No accounts, no database, no gameplay objectives. Meshy API behavior reference: `llms-full.txt` (Meshy's published docs dump) and https://docs.meshy.ai.
 
 ## Project Context
 
